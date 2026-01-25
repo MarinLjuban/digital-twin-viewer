@@ -122,7 +122,7 @@ components.init();
 const ifcLoader = components.get(OBC.IfcLoader);
 await ifcLoader.setup();
 
-// Auto-load the default IFC model
+// Auto-load function - called after all components are initialized
 const loadDefaultModel = async () => {
   try {
     const response = await fetch("/models/OfficeBuilding_complete_2024.ifc");
@@ -135,7 +135,6 @@ const loadDefaultModel = async () => {
     console.error("Failed to load default IFC model:", error);
   }
 };
-loadDefaultModel();
 
 /* MD
 
@@ -255,6 +254,9 @@ fragments.list.onItemSet.add(async ({ value: model }) => {
   // Build systems classification when a model is loaded
   await buildSystemsClassification();
 });
+
+// Load the default IFC model now that everything is initialized
+loadDefaultModel();
 
 // Initialize the BMS mock system (loads pre-configured database)
 BMSApi.initialize();
