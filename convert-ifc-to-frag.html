@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IFC to Fragment Converter</title>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #0f1117;
+      color: #fff;
+      margin: 0;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    h1 {
+      color: #3b82f6;
+      margin-bottom: 20px;
+    }
+    .container {
+      max-width: 600px;
+      width: 100%;
+      background: #161922;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    .step {
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #1c1f2a;
+      border-radius: 8px;
+    }
+    .step h3 {
+      margin: 0 0 12px 0;
+      color: #3b82f6;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    button:disabled {
+      background: #374151;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 16px;
+      background: #1c1f2a;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .success { color: #22c55e; }
+    .error { color: #ef4444; }
+    .info { color: #3b82f6; }
+    .warning { color: #f59e0b; }
+  </style>
+</head>
+<body>
+  <h1>IFC to Fragment Converter</h1>
+
+  <div class="container">
+    <div class="step">
+      <h3>Step 1: Load IFC Model</h3>
+      <p style="color: rgba(255,255,255,0.7); margin-bottom: 12px; font-size: 13px;">
+        This will load the default OfficeBuilding_complete_2024.ifc model.
+      </p>
+      <button id="loadBtn" onclick="loadIFC()">Load IFC Model</button>
+    </div>
+
+    <div class="step">
+      <h3>Step 2: Export as Fragment</h3>
+      <p style="color: rgba(255,255,255,0.7); margin-bottom: 12px; font-size: 13px;">
+        Export the loaded model to .frag format for faster loading.
+      </p>
+      <button id="exportBtn" onclick="exportFragment()" disabled>Export Fragment File</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.182.0/build/three.module.js",
+      "@thatopen/components": "https://unpkg.com/@thatopen/components@3.2.7/dist/index.min.js",
+      "@thatopen/fragments": "https://unpkg.com/@thatopen/fragments@3.2.13/dist/index.min.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import * as OBC from "@thatopen/components";
+
+    const statusEl = document.getElementById("status");
+    const loadBtn = document.getElementById("loadBtn");
+    const exportBtn = document.getElementById("exportBtn");
+
+    let components = null;
+    let loadedModel = null;
+    let fragments = null;
+
+    function log(msg, type = "info") {
+      const timestamp = new Date().toLocaleTimeString();
+      statusEl.innerHTML += `<span class="${type}">[${timestamp}] ${msg}</span>\n`;
+      statusEl.scrollTop = statusEl.scrollHeight;
+    }
+
+    window.loadIFC = async function() {
+      try {
+        loadBtn.disabled = true;
+        log("Initializing components...", "info");
+
+        // Initialize components
+        components = new OBC.Components();
+
+        // Create a minimal world (no rendering needed)
+        const worlds = components.get(OBC.Worlds);
+        const world = worlds.create();
+        world.name = "converter";
+
+        // Simple scene setup
+        const scene = new OBC.SimpleScene(components);
+        scene.setup();
+        world.scene = scene;
+
+        // Initialize FragmentsManager FIRST (required before loading)
+        fragments = components.get(OBC.FragmentsManager);
+        fragments.init("/resources/worker.mjs");
+        log("Fragments manager initialized", "info");
+
+        // Initialize IFC loader
+        const ifcLoader = components.get(OBC.IfcLoader);
+        ifcLoader.settings.autoSetWasm = false;
+        ifcLoader.settings.wasm = {
+          path: "https://unpkg.com/web-ifc@0.0.72/",
+          absolute: false
+        };
+
+        log("Loading IFC file...", "info");
+
+        // Fetch the IFC file
+        const response = await fetch("/models/OfficeBuilding_complete_2024.ifc");
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+
+        const buffer = await response.arrayBuffer();
+        const data = new Uint8Array(buffer);
+
+        log(`IFC file size: ${(data.length / 1024 / 1024).toFixed(2)} MB`, "info");
+        log("Parsing IFC (this may take a moment)...", "warning");
+
+        // Load the IFC
+        loadedModel = await ifcLoader.load(data, true, world.name);
+
+        log("IFC loaded successfully!", "success");
+        log(`Model ID: ${loadedModel.modelId}`, "info");
+
+        exportBtn.disabled = false;
+
+      } catch (error) {
+        log(`Error: ${error.message}`, "error");
+        console.error(error);
+        loadBtn.disabled = false;
+      }
+    };
+
+    window.exportFragment = async function() {
+      try {
+        exportBtn.disabled = true;
+        log("Exporting to fragment format...", "info");
+
+        // The loadedModel returned by ifcLoader.load() is a FragmentsGroup
+        // which has an export() method directly on it
+        log(`Model type: ${loadedModel.constructor.name}`, "info");
+
+        // Debug: list available methods on loadedModel
+        const modelMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(loadedModel))
+          .filter(m => typeof loadedModel[m] === 'function');
+        log(`LoadedModel methods: ${modelMethods.join(', ')}`, "info");
+
+        let fragData;
+
+        // Try export() on the loadedModel directly (FragmentsGroup.export())
+        if (typeof loadedModel.export === 'function') {
+          log("Using loadedModel.export()...", "info");
+          fragData = loadedModel.export();
+        }
+        // Try getting from fragments list
+        else {
+          const model = fragments.list.get(loadedModel.modelId);
+          if (model) {
+            log(`FragmentsList model type: ${model.constructor.name}`, "info");
+            const listMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(model))
+              .filter(m => typeof model[m] === 'function');
+            log(`FragmentsList model methods: ${listMethods.join(', ')}`, "info");
+
+            if (typeof model.export === 'function') {
+              fragData = model.export();
+            }
+          }
+        }
+
+        if (!fragData) {
+          throw new Error("Could not export fragment data");
+        }
+
+        log(`Fragment size: ${(fragData.byteLength / 1024 / 1024).toFixed(2)} MB`, "info");
+
+        // Create download
+        const blob = new Blob([fragData], { type: "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "OfficeBuilding_complete_2024.frag";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        log("Fragment file downloaded!", "success");
+        log("", "info");
+        log("=== NEXT STEPS ===", "success");
+        log("1. Move the downloaded .frag file to: public/models/", "info");
+        log("2. The app will automatically load it on startup", "info");
+
+      } catch (error) {
+        log(`Error: ${error.message}`, "error");
+        console.error(error);
+        exportBtn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

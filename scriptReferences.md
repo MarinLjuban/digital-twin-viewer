@@ -72,6 +72,53 @@ This document provides a quick reference for all scripts in the ifc-viewer proje
 
 ---
 
+### document-store.ts
+
+| Property | Value |
+|----------|-------|
+| **Name** | document-store.ts |
+| **Namespace/Modules** | `DocumentStore` (exported namespace object) |
+| **Description** | Client-side document management using IndexedDB, linked to IFC elements via GlobalId (GUID). Supports document storage, retrieval, and management with pre-configured mock documents for equipment specifications. |
+| **File Location** | `C:\Users\marin\git\github\engine_components\ifc-viewer\src\document-store.ts` |
+
+#### Exported Types
+
+| Type | Description |
+|------|-------------|
+| `DocumentType` | Union type: "manual" \| "specification" \| "drawing" \| "report" \| "warranty" \| "certificate" \| "maintenance" \| "other" |
+| `StoredDocument` | Interface with id, ifcGuid, fileName, displayName, documentType, fileType, fileSize, createdDate, uploadedAt, description |
+| `DocumentMetadata` | Interface with displayName, documentType, createdDate, description |
+| `DocumentWithData` | StoredDocument extended with data (Blob) |
+
+#### DocumentStore Functions
+
+| Function | Description |
+|----------|-------------|
+| `initialize()` | Initialize IndexedDB and seed mock documents |
+| `storeDocument(ifcGuid, file, metadata)` | Store a document linked to an IFC element |
+| `updateDocument(documentId, updates)` | Update document metadata by ID |
+| `getDocumentsByGuid(ifcGuid)` | Get all documents for an IFC element GUID |
+| `getDocumentsForMultipleGuids(guids)` | Get documents for multiple GUIDs |
+| `getDocumentWithData(documentId)` | Get a document with its data by ID |
+| `deleteDocument(documentId)` | Delete a document by ID |
+| `downloadDocument(documentId)` | Trigger browser download of a document |
+| `getDocumentViewUrl(documentId)` | Get blob URL for viewing a document |
+| `canViewInBrowser(fileType)` | Check if a document type can be viewed in browser |
+| `getAllDocuments()` | Get all stored documents |
+| `hasDocuments(ifcGuid)` | Check if any documents exist for a GUID |
+| `formatFileSize(bytes)` | Format file size for display |
+| `getFileIcon(fileType)` | Get file icon based on MIME type |
+| `getDocumentTypeLabel(type)` | Get display label for document type |
+| `resetMockDocuments()` | Clear and re-seed mock documents |
+
+#### Constants
+
+| Constant | Description |
+|----------|-------------|
+| `DOCUMENT_TYPES` | Array of { value, label } objects for UI dropdowns |
+
+---
+
 ## Assets
 
 ### mi_maris_doo_logo.jpg
@@ -93,7 +140,7 @@ This document provides a quick reference for all scripts in the ifc-viewer proje
 |----------|-------|
 | **Name** | package.json |
 | **Namespace/Modules** | N/A |
-| **Description** | NPM package configuration. Defines project dependencies (@thatopen/components, @thatopen/components-front, @thatopen/ui, @thatopen/ui-obc, @thatopen/fragments, three ^0.182.0) and dev dependencies (@types/three ^0.182.0, typescript ^5.9.3, vite ^6.4.1). |
+| **Description** | NPM package configuration. Defines project dependencies (@thatopen/components, @thatopen/components-front, @thatopen/ui, @thatopen/ui-obc, @thatopen/fragments, three ^0.182.0, chart.js ^4.4.1) and dev dependencies (@types/three ^0.182.0, typescript ^5.9.3, vite ^6.4.1). |
 | **File Location** | `C:\Users\marin\git\github\engine_components\ifc-viewer\package.json` |
 
 ### tsconfig.json
@@ -613,6 +660,7 @@ This document provides a quick reference for all scripts in the ifc-viewer proje
 ### Project Files
 - **Main Application Logic**: [main.ts](C:\Users\marin\git\github\engine_components\ifc-viewer\src\main.ts)
 - **BMS Mock API**: [bms-mock.ts](C:\Users\marin\git\github\engine_components\ifc-viewer\src\bms-mock.ts)
+- **Document Storage**: [document-store.ts](C:\Users\marin\git\github\engine_components\ifc-viewer\src\document-store.ts)
 - **Project Configuration**: [package.json](C:\Users\marin\git\github\engine_components\ifc-viewer\package.json)
 - **TypeScript Config**: [tsconfig.json](C:\Users\marin\git\github\engine_components\ifc-viewer\tsconfig.json)
 - **HTML Entry Point**: [index.html](C:\Users\marin\git\github\engine_components\ifc-viewer\index.html)
@@ -636,24 +684,27 @@ This document provides a quick reference for all scripts in the ifc-viewer proje
 | `BUI` | @thatopen/ui | 3.2.4 | UI components (buttons, tables, panels) |
 | `BUIC` | @thatopen/ui-obc | 3.2.3 | Pre-built OBC UI (spatial tree, properties) |
 | `FRAGS` | @thatopen/fragments | 3.2.13 | Fragment/geometry management |
+| `Chart` | chart.js | 4.4.1 | Sensor data visualization charts |
 | `BMSApi` | ./bms-mock | local | Mock BMS sensor data for digital twin |
+| `DocumentStore` | ./document-store | local | IndexedDB document storage for IFC elements |
 
 ---
 
 ## Architecture Overview
 
 ```
-                    main.ts (Application Entry)
-                           ↓ uses
-    ┌──────────────────────┼──────────────────────┐
-    ↓                      ↓                      ↓
-BMSApi (BMS Mock)    BUIC (UI-OBC)           BUI (UI)
-    ↓ coupled via         ↓ uses                  ↓ uses
-    IFC GUIDs        OBCF (Components-Front)      │
-                          ↓ uses                  │
-                     OBC (Components) ←───────────┘
-                          ↓ uses
-                    FRAGS (Fragments)
-                          ↓ uses
-                    THREE.js + Web-IFC
+                         main.ts (Application Entry)
+                                  ↓ uses
+    ┌────────────────┬────────────┼────────────┬────────────────┐
+    ↓                ↓            ↓            ↓                ↓
+BMSApi         DocumentStore   BUIC        BUI (UI)        Chart.js
+(BMS Mock)     (Documents)    (UI-OBC)         ↓ uses      (Charts)
+    ↓              ↓              ↓ uses       │                ↓
+coupled via    IndexedDB    OBCF (Components-Front)        Sensor
+IFC GUIDs                        ↓ uses       │            Visualization
+                            OBC (Components) ←┘
+                                 ↓ uses
+                           FRAGS (Fragments)
+                                 ↓ uses
+                           THREE.js + Web-IFC
 ```

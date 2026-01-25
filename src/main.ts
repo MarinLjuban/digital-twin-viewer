@@ -120,19 +120,66 @@ components.init();
   */
 
 const ifcLoader = components.get(OBC.IfcLoader);
-await ifcLoader.setup();
+
+// Configure WASM path explicitly
+ifcLoader.settings.autoSetWasm = false;
+ifcLoader.settings.wasm = {
+  path: "https://unpkg.com/web-ifc@0.0.72/",
+  absolute: false
+};
 
 // Auto-load function - called after all components are initialized
+// Tries to load the faster .frag file first, falls back to .ifc if not available
 const loadDefaultModel = async () => {
+  // Try loading the pre-converted fragment file first (much faster)
+  let fragLoaded = false;
   try {
-    const response = await fetch("/models/OfficeBuilding_complete_2024.ifc");
-    if (!response.ok) throw new Error(`Failed to fetch model: ${response.status}`);
-    const buffer = await response.arrayBuffer();
-    const data = new Uint8Array(buffer);
-    await ifcLoader.load(data, true, world.name!);
-    console.log("Default IFC model loaded successfully");
-  } catch (error) {
-    console.error("Failed to load default IFC model:", error);
+    console.log("Attempting to load pre-converted fragment file...");
+    const fragResponse = await fetch("/models/OfficeBuilding_complete_2024.frag");
+
+    if (fragResponse.ok) {
+      const contentType = fragResponse.headers.get("content-type") || "";
+      // Make sure we didn't get an HTML error page
+      if (!contentType.includes("text/html")) {
+        console.log("Fragment file found, loading...");
+        const fragBuffer = await fragResponse.arrayBuffer();
+        const fragData = new Uint8Array(fragBuffer);
+        console.log(`Fragment file size: ${(fragData.length / 1024 / 1024).toFixed(2)} MB`);
+
+        const model = await fragments.core.load(fragData, { modelId: "default-model" });
+        console.log("Fragment model loaded successfully", model);
+
+        // Add to scene and setup camera
+        world.scene.three.add(model.object);
+        model.useCamera(world.camera.three);
+        fragments.core.update(true);
+        fragLoaded = true;
+      }
+    }
+  } catch (fragError) {
+    console.log("Fragment loading failed, will try IFC:", fragError);
+  }
+
+  // Fall back to IFC loading if fragment failed or not found
+  if (!fragLoaded) {
+    try {
+      console.log("Loading IFC file...");
+      const response = await fetch("/models/OfficeBuilding_complete_2024.ifc");
+      if (!response.ok) throw new Error(`Failed to fetch model: ${response.status}`);
+      const buffer = await response.arrayBuffer();
+      const data = new Uint8Array(buffer);
+      console.log(`IFC file size: ${(data.length / 1024 / 1024).toFixed(2)} MB`);
+
+      const model = await ifcLoader.load(data, true, world.name!);
+      console.log("IFC model loaded successfully", model);
+
+      // Add to scene and setup camera
+      world.scene.three.add(model.object);
+      model.useCamera(world.camera.three);
+      fragments.core.update(true);
+    } catch (error) {
+      console.error("Failed to load default model:", error);
+    }
   }
 };
 

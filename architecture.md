@@ -10,7 +10,11 @@ A digital twin viewer for BIM/IFC models built with Three.js and the @thatopen c
 |----------|------------|---------|
 | 3D Engine | Three.js | 0.182.0 |
 | BIM Framework | @thatopen/components | 3.2.7 |
+| BIM Frontend | @thatopen/components-front | 3.2.17 |
 | UI Framework | @thatopen/ui (BUI) | 3.2.4 |
+| Pre-built UI | @thatopen/ui-obc (BUIC) | 3.2.3 |
+| Fragments | @thatopen/fragments | 3.2.13 |
+| Charts | Chart.js | 4.4.1 |
 | Build Tool | Vite | 6.4.1 |
 | Language | TypeScript | 5.9.3 |
 | Storage | IndexedDB | Browser API |
@@ -20,15 +24,25 @@ A digital twin viewer for BIM/IFC models built with Three.js and the @thatopen c
 ```
 ifc-viewer/
 ├── src/
-│   ├── main.ts              # Application entry point and UI
+│   ├── main.ts              # Application entry point and UI (3686 lines)
 │   ├── bms-mock.ts          # Building Management System mock API
-│   └── document-store.ts    # IndexedDB document storage service
+│   ├── document-store.ts    # IndexedDB document storage service
+│   └── mi_maris_doo_logo.jpg # Company logo asset
 ├── public/
+│   ├── models/
+│   │   ├── OfficeBuilding_complete_2024.frag # Pre-converted fragment (fast loading)
+│   │   └── OfficeBuilding_complete_2024.ifc  # Original IFC model (fallback)
+│   ├── documents/           # Pre-configured document PDFs (6 files)
 │   └── resources/
 │       └── worker.mjs       # Web Worker for fragment processing
 ├── index.html               # HTML entry with CSS design system
 ├── package.json
-└── tsconfig.json
+├── tsconfig.json
+├── vite.config.ts           # Vite bundler configuration
+├── architecture.md          # This file (developer reference)
+├── scriptReferences.md      # API reference guide
+├── USER_GUIDE.md            # End-user documentation
+└── convert-ifc-to-frag.html # IFC to Fragment conversion utility
 ```
 
 ## Core Architecture
@@ -56,6 +70,9 @@ index.html
             ├── IfcLoader configuration
             ├── Highlighter/Hoverer setup
             ├── FragmentsManager with LOD
+            ├── loadDefaultModel()
+            │   ├── Try: Load .frag file (fast path)
+            │   └── Fallback: Load .ifc file (slower)
             ├── BMSApi.initialize()
             ├── DocumentStore.initialize()
             └── UI component creation
@@ -95,9 +112,13 @@ type SensorType = 'temperature' | 'humidity' | 'occupancy' | 'co2' |
 
 // Key methods
 BMSApi.initialize()                    // Load database, start simulation
-BMSApi.getSensorData(guid)             // Get current sensor readings
+BMSApi.getData(guid)                   // Get current sensor readings (async)
+BMSApi.getMultipleData(guids)          // Get sensor data for multiple elements
+BMSApi.getHistoricalData(guid, type, hours) // Time-series data
 BMSApi.subscribe(guid, callback)       // Real-time updates (5s interval)
-BMSApi.getHistoricalData(guid, hours)  // Time-series data
+BMSApi.getAllMonitoredElements()       // Get all elements with sensors
+BMSApi.getAlertsElements()             // Get elements with warnings/alarms
+BMSApi.getRegisteredGuids()            // Get all registered IFC GUIDs
 ```
 
 **Features:**
@@ -112,8 +133,8 @@ Client-side document management using IndexedDB.
 
 ```typescript
 // Document types
-type DocumentType = 'manual' | 'specification' | 'drawing' |
-                    'certificate' | 'photo' | 'report' | 'other';
+type DocumentType = 'manual' | 'specification' | 'drawing' | 'report' |
+                    'warranty' | 'certificate' | 'maintenance' | 'other';
 
 // Key methods
 DocumentStore.initialize()                        // Setup IndexedDB schema
@@ -330,12 +351,20 @@ interface FilterCondition {
 
 | File | Lines | Key Functions |
 |------|-------|---------------|
-| `main.ts` | 1-200 | Initialization, component setup |
-| `main.ts` | 200-400 | Event handlers, data fetching |
-| `main.ts` | 400-600 | UI components (panels) |
-| `main.ts` | 600-800 | Toolbar, layout assembly |
-| `bms-mock.ts` | All | BMSApi class, simulation logic |
-| `document-store.ts` | All | DocumentStore class, IndexedDB ops |
+| `main.ts` | 1-150 | Imports, helpers, scene/camera/renderer setup |
+| `main.ts` | 151-280 | IFC loader, FragmentsManager, default model loading |
+| `main.ts` | 281-400 | Classifier, ItemsFinder, systems classification |
+| `main.ts` | 401-630 | Systems tree rendering |
+| `main.ts` | 631-820 | Properties panel, BIM tables |
+| `main.ts` | 821-1150 | BMS sensor display, sensor icons |
+| `main.ts` | 1151-1460 | Sensor chart visualization (Chart.js) |
+| `main.ts` | 1461-1925 | Document management UI, upload, modal viewer |
+| `main.ts` | 1926-2480 | Measurement tools, clipping, visibility controls |
+| `main.ts` | 2481-2750 | Camera navigation modes, keyboard handlers |
+| `main.ts` | 2751-3460 | Panel layouts, floating toolbar creation |
+| `main.ts` | 3461-3686 | Layout assembly, grid setup, final initialization |
+| `bms-mock.ts` | 1-457 | BMSApi class, sensor simulation, subscription logic |
+| `document-store.ts` | 1-759 | DocumentStore class, IndexedDB ops, mock document seeding |
 
 ## Quick Start for Development
 
