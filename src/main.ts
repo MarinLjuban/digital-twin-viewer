@@ -122,6 +122,21 @@ components.init();
 const ifcLoader = components.get(OBC.IfcLoader);
 await ifcLoader.setup();
 
+// Auto-load the default IFC model
+const loadDefaultModel = async () => {
+  try {
+    const response = await fetch("/models/OfficeBuilding_complete_2024.ifc");
+    if (!response.ok) throw new Error(`Failed to fetch model: ${response.status}`);
+    const buffer = await response.arrayBuffer();
+    const data = new Uint8Array(buffer);
+    await ifcLoader.load(data, true, world.name!);
+    console.log("Default IFC model loaded successfully");
+  } catch (error) {
+    console.error("Failed to load default IFC model:", error);
+  }
+};
+loadDefaultModel();
+
 /* MD
 
   ###💡 Getting the highlighter
@@ -2783,9 +2798,6 @@ const leftPanel = BUI.Component.create(() => {
 
 // Right panel - Trees (swapped from left)
 const rightPanel = BUI.Component.create(() => {
-  const [loadIfcBtn] = BUIC.buttons.loadIfc({ components, worldName: world.name });
-  const [loadFragBtn] = BUIC.buttons.loadFrag({ components });
-
   const onSearch = (e: Event) => {
     const input = e.target as BUI.TextInput;
     spatialTree.queryString = input.value;
@@ -2848,10 +2860,6 @@ const rightPanel = BUI.Component.create(() => {
 
   return BUI.html`
    <bim-panel label="Model">
-    <bim-panel-section label="Load Model">
-      ${loadIfcBtn}
-      ${loadFragBtn}
-    </bim-panel-section>
     <bim-panel-section label="Spatial Tree">
       <bim-text-input @input=${onSearch} placeholder="Search..." debounce="200"></bim-text-input>
       ${spatialTree}
