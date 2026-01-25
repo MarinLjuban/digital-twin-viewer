@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IFC Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================
+       LIGHT THEME (Default) - Warm Paper
+       Inspired by architectural drawings on cream paper
+       ============================================ */
+    :root, [data-theme="light"] {
+      /* Surface hierarchy - warm paper tones, softer */
+      --canvas: #e8e6e1;
+      --surface-base: #f0eeea;
+      --surface-raised: #f5f3ef;
+      --surface-overlay: #e3e1dc;
+
+      /* Text hierarchy - warm dark grays */
+      --text-primary: rgba(28, 25, 23, 0.95);
+      --text-secondary: rgba(28, 25, 23, 0.72);
+      --text-tertiary: rgba(28, 25, 23, 0.55);
+      --text-muted: rgba(28, 25, 23, 0.38);
+
+      /* Border hierarchy - warm shadows */
+      --border-subtle: rgba(28, 25, 23, 0.06);
+      --border-default: rgba(28, 25, 23, 0.12);
+      --border-strong: rgba(28, 25, 23, 0.18);
+
+      /* Brand - blueprint-inspired accent (consistent across themes) */
+      --accent: #2563eb;
+      --accent-muted: rgba(37, 99, 235, 0.12);
+      --accent-hover: #3b82f6;
+
+      /* Semantic colors - adjusted for light backgrounds */
+      --success: #16a34a;
+      --warning: #ca8a04;
+      --destructive: #dc2626;
+
+      /* Spacing scale - 4px base */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+
+      /* Radius - technical, not too soft */
+      --radius-sm: 4px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+
+      /* Typography */
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+      /* Transitions */
+      --transition-fast: 120ms ease-out;
+      --transition-normal: 180ms ease-out;
+
+      /* Light theme specific - subtle inset for depth */
+      --shadow-panel: 0 1px 3px rgba(28, 25, 23, 0.05);
+
+      /* Theme-specific component backgrounds */
+      --property-label-bg: rgba(28, 25, 23, 0.04);
+      --row-alternate-bg: rgba(28, 25, 23, 0.02);
+      --nested-bg: rgba(28, 25, 23, 0.03);
+
+      /* Syntax highlighting colors for light theme */
+      --type-number: #7c3aed;
+      --type-boolean: #16a34a;
+
+      /* Status colors for BMS sensors - light theme */
+      --status-normal: #16a34a;
+      --status-normal-bg: rgba(22, 163, 74, 0.12);
+      --status-warning: #ca8a04;
+      --status-warning-bg: rgba(202, 138, 4, 0.15);
+      --status-alarm: #dc2626;
+      --status-alarm-bg: rgba(220, 38, 38, 0.12);
+
+      /* Chart colors - light theme */
+      --chart-grid: rgba(28, 25, 23, 0.08);
+      --chart-tick: rgba(28, 25, 23, 0.55);
+      --chart-tooltip-bg: rgba(250, 249, 247, 0.97);
+      --chart-tooltip-border: rgba(28, 25, 23, 0.12);
+      --chart-tooltip-title: rgba(28, 25, 23, 0.65);
+      --chart-tooltip-body: rgba(28, 25, 23, 0.90);
+
+      /* Overlay backdrop - light theme */
+      --overlay-backdrop: rgba(28, 25, 23, 0.5);
+    }
+
+    /* ============================================
+       DARK THEME - Blueprint Night
+       Original dark theme preserved
+       ============================================ */
+    [data-theme="dark"] {
+      /* Surface hierarchy - subtle elevation for dark mode */
+      --canvas: #0f1117;
+      --surface-base: #161922;
+      --surface-raised: #1c1f2a;
+      --surface-overlay: #232733;
+
+      /* Text hierarchy - four levels */
+      --text-primary: rgba(255, 255, 255, 0.95);
+      --text-secondary: rgba(255, 255, 255, 0.72);
+      --text-tertiary: rgba(255, 255, 255, 0.50);
+      --text-muted: rgba(255, 255, 255, 0.32);
+
+      /* Border hierarchy - subtle, not harsh */
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.10);
+      --border-strong: rgba(255, 255, 255, 0.16);
+
+      /* Brand - blueprint-inspired accent */
+      --accent: #3b82f6;
+      --accent-muted: rgba(59, 130, 246, 0.15);
+      --accent-hover: #60a5fa;
+
+      /* Semantic colors - slightly desaturated for dark mode */
+      --success: #34d399;
+      --warning: #fbbf24;
+      --destructive: #f87171;
+
+      /* Dark theme specific */
+      --shadow-panel: none;
+
+      /* Theme-specific component backgrounds */
+      --property-label-bg: rgba(0, 0, 0, 0.15);
+      --row-alternate-bg: rgba(255, 255, 255, 0.02);
+      --nested-bg: rgba(0, 0, 0, 0.1);
+
+      /* Syntax highlighting colors for dark theme */
+      --type-number: #a78bfa;
+      --type-boolean: #34d399;
+
+      /* Status colors for BMS sensors - dark theme */
+      --status-normal: #34d399;
+      --status-normal-bg: rgba(52, 211, 153, 0.15);
+      --status-warning: #fbbf24;
+      --status-warning-bg: rgba(251, 191, 36, 0.18);
+      --status-alarm: #f87171;
+      --status-alarm-bg: rgba(248, 113, 113, 0.18);
+
+      /* Chart colors - dark theme */
+      --chart-grid: rgba(255, 255, 255, 0.05);
+      --chart-tick: rgba(255, 255, 255, 0.50);
+      --chart-tooltip-bg: rgba(22, 25, 34, 0.95);
+      --chart-tooltip-border: rgba(255, 255, 255, 0.10);
+      --chart-tooltip-title: rgba(255, 255, 255, 0.70);
+      --chart-tooltip-body: rgba(255, 255, 255, 0.95);
+
+      /* Overlay backdrop - dark theme */
+      --overlay-backdrop: rgba(0, 0, 0, 0.75);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--font-sans);
+      background: var(--canvas);
+      color: var(--text-primary);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #app {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Override BUI component styles for refined appearance */
+    bim-panel {
+      overflow: hidden;
+      --bim-ui_bg-base: var(--surface-base);
+      --bim-ui_bg-contrast-10: var(--border-subtle);
+      --bim-ui_bg-contrast-20: var(--border-default);
+      --bim-ui_bg-contrast-40: var(--text-muted);
+      --bim-ui_bg-contrast-60: var(--text-tertiary);
+      --bim-ui_bg-contrast-80: var(--text-secondary);
+      --bim-ui_bg-contrast-100: var(--text-primary);
+      --bim-ui_color-text: var(--text-primary);
+      --bim-ui_main-base: var(--accent);
+      --bim-ui_main-contrast: #ffffff;
+      --bim-ui_accent-base: var(--accent);
+      --bim-label--c: var(--text-primary);
+      --bim-icon--c: var(--text-secondary);
+      background: var(--surface-base) !important;
+      border-right: 1px solid var(--border-subtle) !important;
+      color: var(--text-primary);
+    }
+
+    bim-panel[label="Model"] {
+      border-right: none !important;
+      border-left: 1px solid var(--border-subtle) !important;
+    }
+
+    bim-panel-section {
+      --bim-ui_bg-base: transparent;
+      --bim-label--c: var(--text-secondary);
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-subtle) !important;
+    }
+
+    bim-panel-section:last-child {
+      border-bottom: none !important;
+    }
+
+    bim-button {
+      --bim-button--bgc: var(--surface-raised);
+      --bim-button--olc: var(--border-default);
+      --bim-button--c: var(--text-primary);
+      --bim-label--c: var(--text-primary);
+      --bim-icon--c: var(--text-secondary);
+      --bim-ui_size-base: 13px;
+      border-radius: var(--radius-sm) !important;
+      transition: all var(--transition-fast) !important;
+    }
+
+    bim-button:hover {
+      --bim-button--bgc: var(--surface-overlay);
+      --bim-button--olc: var(--border-strong);
+      --bim-button--c: var(--text-primary);
+    }
+
+    bim-checkbox {
+      --bim-checkbox--c: var(--accent);
+      --bim-ui_size-base: 13px;
+    }
+
+    bim-text-input {
+      --bim-input--bgc: var(--surface-raised);
+      --bim-input--olc: var(--border-default);
+      --bim-ui_size-base: 13px;
+      border-radius: var(--radius-sm) !important;
+    }
+
+    bim-text-input:focus-within {
+      --bim-input--olc: var(--accent);
+    }
+
+    bim-label {
+      --bim-label--c: var(--text-secondary);
+      --bim-ui_size-base: 12px;
+    }
+
+    bim-dropdown {
+      --bim-dropdown--bgc: var(--surface-raised);
+      --bim-dropdown--olc: var(--border-default);
+      --bim-dropdown--c: var(--text-primary);
+      --bim-label--c: var(--text-secondary);
+    }
+
+    bim-option {
+      --bim-option--bgc: transparent;
+      --bim-option--c: var(--text-primary);
+    }
+
+    bim-option:hover {
+      --bim-option--bgc: var(--surface-overlay);
+    }
+
+    bim-table {
+      --bim-ui_bg-base: transparent;
+      --bim-ui_bg-contrast-10: var(--border-subtle);
+      --bim-ui_bg-contrast-20: var(--surface-raised);
+      font-size: 12px;
+    }
+
+    bim-table-row {
+      border-bottom: 1px solid var(--border-subtle) !important;
+      transition: background var(--transition-fast) !important;
+    }
+
+    bim-table-row:hover {
+      background: var(--surface-raised) !important;
+    }
+
+    bim-table-cell {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      padding: var(--space-2) var(--space-3) !important;
+    }
+
+    /* Properties panel specific styling */
+    bim-panel[label="Properties"] {
+      border-left: 1px solid var(--border-subtle) !important;
+      border-right: none !important;
+    }
+
+    bim-panel[label="Properties"] bim-table {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    /* Property groups - collapsible sections */
+    bim-panel[label="Properties"] bim-table-group {
+      background: var(--surface-raised) !important;
+      border-radius: var(--radius-sm) !important;
+      margin-bottom: var(--space-2) !important;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle) !important;
+    }
+
+    bim-panel[label="Properties"] bim-table-group::part(header) {
+      background: linear-gradient(180deg, var(--surface-overlay) 0%, var(--surface-raised) 100%) !important;
+      padding: var(--space-2) var(--space-3) !important;
+      font-weight: 600 !important;
+      font-size: 11px !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.3px !important;
+      color: var(--text-primary) !important;
+      border-bottom: 1px solid var(--border-subtle) !important;
+    }
+
+    bim-panel[label="Properties"] bim-table-group[expanded]::part(header) {
+      border-bottom: 1px solid var(--border-default) !important;
+    }
+
+    /* Property name column - left side */
+    bim-panel[label="Properties"] bim-table-cell:first-child {
+      color: var(--text-tertiary) !important;
+      font-family: var(--font-sans) !important;
+      font-weight: 500 !important;
+      font-size: 11px !important;
+      background: var(--property-label-bg) !important;
+      border-right: 1px solid var(--border-subtle) !important;
+    }
+
+    /* Property value column - right side */
+    bim-panel[label="Properties"] bim-table-cell:last-child {
+      color: var(--text-primary) !important;
+      font-family: var(--font-mono) !important;
+      font-size: 11px !important;
+    }
+
+    /* Alternate row colors for better readability */
+    bim-panel[label="Properties"] bim-table-row:nth-child(even) {
+      background: var(--row-alternate-bg) !important;
+    }
+
+    bim-panel[label="Properties"] bim-table-row:hover {
+      background: var(--accent-muted) !important;
+    }
+
+    bim-panel[label="Properties"] bim-table-row:hover bim-table-cell:first-child {
+      color: var(--text-secondary) !important;
+    }
+
+    /* Empty state styling */
+    bim-panel[label="Properties"] bim-panel-section:empty::after {
+      content: "Select an element to view properties";
+      display: block;
+      padding: var(--space-6);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    /* Make the table children (nested properties) visually distinct */
+    bim-table-children {
+      background: var(--nested-bg) !important;
+      border-left: 2px solid var(--accent-muted) !important;
+      margin-left: var(--space-3) !important;
+    }
+
+    bim-table-children bim-table-row {
+      border-bottom: 1px solid var(--border-subtle) !important;
+    }
+
+    /* Clickable cells cursor */
+    bim-panel[label="Properties"] bim-table-cell {
+      cursor: pointer;
+    }
+
+    bim-panel[label="Properties"] bim-table-cell:active {
+      background: var(--accent-muted) !important;
+    }
+
+    /* Value type indicators */
+    bim-panel[label="Properties"] bim-table-cell:last-child[data-type="number"] {
+      color: var(--type-number) !important;
+    }
+
+    bim-panel[label="Properties"] bim-table-cell:last-child[data-type="boolean"] {
+      color: var(--type-boolean) !important;
+    }
+
+    /* Properties container styling */
+    #properties-container {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #properties-container bim-table {
+      flex: 1;
+    }
+
+    /* Better spacing for property sections */
+    bim-panel[label="Properties"] bim-panel-section {
+      padding: var(--space-2) !important;
+    }
+
+    bim-panel[label="Properties"] bim-panel-section::part(content) {
+      padding: var(--space-2) 0 !important;
+    }
+
+    /* Selection highlight for copied cells */
+    @keyframes cellCopied {
+      0% { background: var(--accent) !important; }
+      100% { background: transparent !important; }
+    }
+
+    .cell-copied {
+      animation: cellCopied 0.3s ease-out forwards;
+    }
+
+    bim-viewport {
+      background: var(--canvas) !important;
+    }
+
+    /* Refined scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-default);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--border-strong);
+    }
+
+    /* Panel header refinement */
+    bim-panel::part(header) {
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-tertiary);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    /* Section header refinement */
+    bim-panel-section::part(header) {
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Theme toggle button styling */
+    .theme-toggle {
+      position: fixed;
+      top: var(--space-3);
+      left: var(--space-3);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      background: var(--surface-raised);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      color: var(--text-secondary);
+    }
+
+    .theme-toggle:hover {
+      background: var(--surface-overlay);
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Show sun icon in dark mode, moon in light mode */
+    .theme-toggle .icon-sun { display: none; }
+    .theme-toggle .icon-moon { display: block; }
+
+    [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+    [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+    /* Selection box overlay for Ctrl+drag selection */
+    .selection-box {
+      position: fixed;
+      border: 2px solid var(--accent);
+      background: var(--accent-muted);
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0;
+      transition: opacity 0.1s ease-out;
+    }
+
+    .selection-box.active {
+      opacity: 1;
+    }
+
+    /* Selection box border animation */
+    .selection-box::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border: 2px dashed var(--accent);
+      border-radius: 2px;
+      animation: selectionBoxPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes selectionBoxPulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* Cursor indicator when Ctrl is held */
+    .ctrl-held bim-viewport {
+      cursor: crosshair !important;
+    }
+  </style>
+  <script>
+    // Theme initialization - runs before DOM to prevent FOUC
+    (function() {
+      const savedTheme = localStorage.getItem('ifc-viewer-theme');
+      // Light theme is default, only apply dark if explicitly saved
+      if (savedTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <!-- Theme toggle button -->
+  <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  </button>
+
+  <bim-grid id="app"></bim-grid>
+
+  <script>
+    // Theme toggle functionality
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+      const html = document.documentElement;
+      const currentTheme = html.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+      if (newTheme === 'light') {
+        html.removeAttribute('data-theme');
+      } else {
+        html.setAttribute('data-theme', newTheme);
+      }
+
+      localStorage.setItem('ifc-viewer-theme', newTheme);
+    });
+  </script>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

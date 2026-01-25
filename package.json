@@ -1,0 +1,28 @@
+{
+  "name": "ifc-viewer",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@thatopen/components": "^3.2.7",
+    "@thatopen/components-front": "^3.2.17",
+    "@thatopen/fragments": "^3.2.13",
+    "@thatopen/ui": "^3.2.4",
+    "@thatopen/ui-obc": "^3.2.3",
+    "chart.js": "^4.4.1",
+    "three": "^0.182.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.182.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1"
+  }
+}
