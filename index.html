@@ -693,7 +693,7 @@
       </button>
     </div>
     <div class="help-panel-content">
-      <iframe src="/USER_GUIDE.pdf" title="User Guide"></iframe>
+      <iframe id="help-iframe" src="" title="User Guide"></iframe>
     </div>
   </div>
 
@@ -718,8 +718,13 @@
     // Help panel functionality (floating, draggable)
     const helpPanel = document.getElementById('help-panel');
     const helpHeader = document.getElementById('help-panel-header');
+    const helpIframe = document.getElementById('help-iframe');
 
     document.getElementById('help-toggle').addEventListener('click', function() {
+      // Set iframe src on first open (handles base URL for GitHub Pages)
+      if (!helpIframe.src || helpIframe.src === window.location.href) {
+        helpIframe.src = new URL('USER_GUIDE.pdf', window.location.href).href;
+      }
       helpPanel.classList.toggle('visible');
     });
 

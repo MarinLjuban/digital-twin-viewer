@@ -135,7 +135,7 @@ const loadDefaultModel = async () => {
   let fragLoaded = false;
   try {
     console.log("Attempting to load pre-converted fragment file...");
-    const fragResponse = await fetch("/models/OfficeBuilding_complete_2024.frag");
+    const fragResponse = await fetch(`${import.meta.env.BASE_URL}models/OfficeBuilding_complete_2024.frag`);
 
     if (fragResponse.ok) {
       const contentType = fragResponse.headers.get("content-type") || "";
@@ -164,7 +164,7 @@ const loadDefaultModel = async () => {
   if (!fragLoaded) {
     try {
       console.log("Loading IFC file...");
-      const response = await fetch("/models/OfficeBuilding_complete_2024.ifc");
+      const response = await fetch(`${import.meta.env.BASE_URL}models/OfficeBuilding_complete_2024.ifc`);
       if (!response.ok) throw new Error(`Failed to fetch model: ${response.status}`);
       const buffer = await response.arrayBuffer();
       const data = new Uint8Array(buffer);

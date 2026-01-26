@@ -673,7 +673,7 @@ const seedMockDocuments = async (): Promise<void> => {
   for (const entry of MOCK_DOCUMENTS_DATABASE) {
     try {
       // Fetch the document file
-      const response = await fetch(entry.filePath);
+      const response = await fetch(`${import.meta.env.BASE_URL}${entry.filePath.replace(/^\//, "")}`);
       if (!response.ok) {
         errors.push(`Failed to fetch ${entry.filePath}: ${response.status}`);
         continue;
