@@ -23,6 +23,7 @@ import * as FRAGS from "@thatopen/fragments";
 import BMSApi, { BMSDataPoint, SensorType, HistoricalReading } from "./bms-mock";
 import DocumentStore, { StoredDocument, DocumentMetadata, DocumentType, DOCUMENT_TYPES } from "./document-store";
 import { Chart, registerables } from 'chart.js';
+import { t, getLanguage, setLanguage, toggleLanguage, onLanguageChange, getSensorTypeLabel, getDocumentTypeLabel, getDocumentTypes, getStatusLabel, Language } from "./i18n";
 
 // Register Chart.js components
 Chart.register(...registerables);
@@ -89,6 +90,36 @@ if (themeToggle) {
   themeToggle.addEventListener('click', () => {
     // Small delay to let the DOM update first
     requestAnimationFrame(updateSceneBackground);
+  });
+}
+
+// Language toggle handler
+const langToggle = document.getElementById('lang-toggle');
+const langLabel = langToggle?.querySelector('.lang-label');
+
+// Set initial language label
+if (langLabel) {
+  langLabel.textContent = getLanguage().toUpperCase();
+}
+
+// Update help panel title based on language
+const updateHelpPanelTitle = () => {
+  const helpPanelTitle = document.getElementById('help-panel-title');
+  if (helpPanelTitle) {
+    helpPanelTitle.textContent = t('userGuide');
+  }
+};
+updateHelpPanelTitle();
+
+if (langToggle) {
+  langToggle.addEventListener('click', () => {
+    const newLang = toggleLanguage();
+    if (langLabel) {
+      langLabel.textContent = newLang.toUpperCase();
+    }
+    // Reload the page to apply all translations
+    // This is the most reliable way to update all BUI components
+    window.location.reload();
   });
 }
 
@@ -298,8 +329,6 @@ fragments.list.onItemSet.add(async ({ value: model }) => {
   model.useCamera(world.camera.three);
   world.scene.three.add(model.object);
   await fragments.core.update(true);
-  // Build systems classification when a model is loaded
-  await buildSystemsClassification();
 });
 
 // Load the default IFC model now that everything is initialized
@@ -314,96 +343,8 @@ DocumentStore.initialize().then(() => {
   console.log("[Documents] Document store initialized");
 });
 
-// Setup Classifier for systems tree
-const classifier = components.get(OBC.Classifier);
-
 // Setup ItemsFinder for property-based filtering
 const itemsFinder = components.get(OBC.ItemsFinder);
-
-// Build systems classification from IFC data
-const buildSystemsClassification = async () => {
-  // Clear previous classifications
-  classifier.list.delete("Systems");
-
-  // Get all models and find MEP elements to group by system
-  for (const [modelId, model] of fragments.list) {
-    if (model.isDeltaModel) continue;
-
-    try {
-      // Find all MEP (Mechanical, Electrical, Plumbing) elements
-      // These are the elements that typically belong to systems
-      const mepCategories = await model.getItemsOfCategories([
-        /DUCT/i,           // IFCDUCTSEGMENT, IFCDUCTFITTING
-        /PIPE/i,           // IFCPIPESEGMENT, IFCPIPEFITTING
-        /TERMINAL/i,       // IFCAIRTERMINAL, IFCSANITARYTERMINAL, IFCWASTETERMINAL
-        /FAN/i,            // IFCFAN
-        /VALVE/i,          // IFCVALVE
-        /UNITARYEQUIPMENT/i, // IFCUNITARYEQUIPMENT
-      ]);
-
-      const mepIds = Object.values(mepCategories).flat();
-      console.log(`Found ${mepIds.length} MEP elements in model ${modelId}`);
-
-      if (mepIds.length === 0) continue;
-
-      // Get element data with properties that might contain system info
-      // Check for "System Name", "System Type", or use ObjectType as fallback
-      const elementsData = await model.getItemsData(mepIds, {
-        attributes: ["Name", "ObjectType", "Description", "Tag"],
-        relations: {
-          // Try to get property sets that might contain system information
-          IsDefinedBy: { attributes: true, relations: false },
-          HasAssignments: { attributes: true, relations: false },
-        }
-      });
-
-      console.log("Sample MEP element data:", elementsData[0]);
-
-      // Group elements by their ObjectType (most reliable for system grouping)
-      for (const element of elementsData) {
-        let systemName = "Unclassified";
-
-        // Try to get system name from ObjectType first (common pattern)
-        if (element.ObjectType && "value" in element.ObjectType) {
-          const objectType = String(element.ObjectType.value);
-          if (objectType && objectType.trim() !== "") {
-            systemName = objectType;
-          }
-        }
-
-        // Try to find system info in HasAssignments relation
-        if (Array.isArray(element.HasAssignments)) {
-          for (const assignment of element.HasAssignments) {
-            if (assignment.Name && "value" in assignment.Name) {
-              systemName = String(assignment.Name.value);
-              break;
-            }
-          }
-        }
-
-        // Get element's local ID
-        const localIdAttr = element._localId;
-        if (!localIdAttr || !("value" in localIdAttr)) continue;
-        const localId = localIdAttr.value as number;
-
-        // Add to classification
-        const groupData = classifier.getGroupData("Systems", systemName);
-        if (!groupData.map[modelId]) {
-          groupData.map[modelId] = new Set();
-        }
-        groupData.map[modelId].add(localId);
-      }
-    } catch (e) {
-      console.log("Error building systems classification:", e);
-    }
-  }
-
-  // Update the systems tree UI
-  updateSystemsTree();
-};
-
-// Store systems tree table reference for updates
-let systemsTreeContainer: HTMLElement | null = null;
 
 // ============================================
 // Property Filter System
@@ -488,7 +429,7 @@ const executeFilter = async () => {
 const updateFilterResultCount = (count: number) => {
   const resultLabel = document.getElementById("filter-result-count");
   if (resultLabel) {
-    resultLabel.textContent = count > 0 ? `${count} elements found` : "No elements found";
+    resultLabel.textContent = count > 0 ? `${count} ${t('elementsFound')}` : `0 ${t('elementsFound')}`;
   }
 };
 
@@ -499,10 +440,10 @@ const renderFilterConditions = (container: HTMLElement) => {
   if (filterConditions.length === 0) {
     const emptyState = document.createElement("div");
     emptyState.style.cssText = `
-      padding: 16px;
+      padding: 24px 16px;
       text-align: center;
       color: var(--text-muted, rgba(255, 255, 255, 0.32));
-      font-size: 12px;
+      font-size: 13px;
     `;
     emptyState.textContent = "No filter conditions. Add a condition to start filtering.";
     container.appendChild(emptyState);
@@ -514,11 +455,11 @@ const renderFilterConditions = (container: HTMLElement) => {
     conditionEl.style.cssText = `
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      padding: 10px;
+      gap: 10px;
+      padding: 14px;
       background: var(--surface-base, #161922);
-      border-radius: 6px;
-      margin-bottom: 8px;
+      border-radius: 8px;
+      margin-bottom: 12px;
     `;
 
     // Header with type and delete button
@@ -530,24 +471,29 @@ const renderFilterConditions = (container: HTMLElement) => {
     `;
 
     const typeLabel = document.createElement("span");
-    typeLabel.style.cssText = `
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: var(--accent, #3b82f6);
-    `;
+    typeLabel.className = "sidebar-badge";
     typeLabel.textContent = condition.type === "category" ? "Category" : "Attribute";
 
     const deleteBtn = document.createElement("button");
     deleteBtn.style.cssText = `
-      background: none;
-      border: none;
+      background: var(--surface-raised, #1c1f2a);
+      border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
       color: var(--text-tertiary, rgba(255, 255, 255, 0.50));
       cursor: pointer;
-      padding: 2px;
-      font-size: 14px;
+      padding: 4px 8px;
+      font-size: 16px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
     `;
     deleteBtn.innerHTML = "×";
+    deleteBtn.onmouseenter = () => {
+      deleteBtn.style.background = "var(--status-alarm-bg, rgba(248, 113, 113, 0.18))";
+      deleteBtn.style.color = "var(--status-alarm, #f87171)";
+    };
+    deleteBtn.onmouseleave = () => {
+      deleteBtn.style.background = "var(--surface-raised, #1c1f2a)";
+      deleteBtn.style.color = "var(--text-tertiary, rgba(255, 255, 255, 0.50))";
+    };
     deleteBtn.onclick = () => {
       filterConditions = filterConditions.filter(c => c.id !== condition.id);
       renderFilterConditions(container);
@@ -560,7 +506,7 @@ const renderFilterConditions = (container: HTMLElement) => {
     if (condition.type === "category") {
       // Category dropdown
       const categorySelect = document.createElement("bim-dropdown") as BUI.Dropdown;
-      categorySelect.label = "IFC Category";
+      categorySelect.label = t('ifcCategory');
 
       ifcCategories.forEach(cat => {
         const option = document.createElement("bim-option") as HTMLElement & { label: string; value: string };
@@ -580,7 +526,7 @@ const renderFilterConditions = (container: HTMLElement) => {
     } else {
       // Attribute name input
       const nameInput = document.createElement("bim-text-input") as BUI.TextInput;
-      nameInput.label = "Attribute Name";
+      nameInput.label = t('attributeName');
       nameInput.placeholder = "e.g., Name, ObjectType, Description";
       nameInput.value = condition.attributeName || "";
       nameInput.addEventListener("input", () => {
@@ -590,7 +536,7 @@ const renderFilterConditions = (container: HTMLElement) => {
 
       // Attribute value input
       const valueInput = document.createElement("bim-text-input") as BUI.TextInput;
-      valueInput.label = "Value (regex)";
+      valueInput.label = t('valueRegex');
       valueInput.placeholder = "e.g., Wall, Basic, .*concrete.*";
       valueInput.value = condition.attributeValue || "";
       valueInput.addEventListener("input", () => {
@@ -604,10 +550,11 @@ const renderFilterConditions = (container: HTMLElement) => {
       const operatorLabel = document.createElement("div");
       operatorLabel.style.cssText = `
         text-align: center;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
-        color: var(--text-tertiary, rgba(255, 255, 255, 0.40));
-        padding: 4px 0;
+        color: var(--accent, #3b82f6);
+        padding: 8px 0;
+        margin-top: 4px;
       `;
       operatorLabel.textContent = filterAggregation === "inclusive" ? "OR" : "AND";
       conditionEl.appendChild(operatorLabel);
@@ -617,43 +564,7 @@ const renderFilterConditions = (container: HTMLElement) => {
   });
 };
 
-// Update systems tree UI
-const updateSystemsTree = () => {
-  if (systemsTreeContainer) {
-    // Re-render the systems tree
-    renderSystemsTree(systemsTreeContainer);
-  }
-};
-
-// Render systems tree into container
-const renderSystemsTree = async (container: HTMLElement) => {
-  container.innerHTML = "";
-
-  const systemsClassification = classifier.list.get("Systems");
-  if (!systemsClassification || systemsClassification.size === 0) {
-    const noData = document.createElement("bim-label");
-    noData.textContent = "No systems found in model";
-    container.appendChild(noData);
-    return;
-  }
-
-  for (const [systemName, groupData] of systemsClassification) {
-    const items = await groupData.get();
-    const count = Object.values(items).reduce((sum, ids) => sum + ids.size, 0);
-
-    const button = document.createElement("bim-button") as BUI.Button;
-    button.label = `${systemName} (${count})`;
-    button.icon = "mdi:pipe";
-    button.onclick = async () => {
-      // Highlight all elements in this system
-      await highlighter.highlightByID("select", items, true, true);
-    };
-
-    container.appendChild(button);
-  }
-};
-
-/* MD 
+/* MD
 
   ### Creating the tree
   Doing this is extremely simple thanks to the information saved in the Fragments file and the power of the UI components from That Open Engine. To proceed with the creation, you can do the following 💪
@@ -1002,14 +913,14 @@ const renderBMSEmptyState = (container: HTMLElement) => {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px 16px;
+      padding: 20px 16px;
       text-align: center;
       color: var(--text-muted, rgba(255, 255, 255, 0.32));
     ">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 10px;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 10px;">
         <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
       </svg>
-      <span style="font-size: 11px;">Select an element to view sensor data</span>
+      <span style="font-size: 11px; font-weight: 500;">${t('selectElementForSensors')}</span>
     </div>
   `;
 };
@@ -1021,15 +932,15 @@ const renderBMSNoSensorState = (container: HTMLElement) => {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px 16px;
+      padding: 20px 16px;
       text-align: center;
       color: var(--text-muted, rgba(255, 255, 255, 0.32));
     ">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 10px;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 10px;">
         <circle cx="12" cy="12" r="10"/>
         <path d="M12 8v4M12 16h.01"/>
       </svg>
-      <span style="font-size: 11px;">No sensors linked to this element</span>
+      <span style="font-size: 11px; font-weight: 500;">${t('noSensorsLinked')}</span>
     </div>
   `;
 };
@@ -1044,15 +955,16 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
       flex-direction: column;
       gap: 8px;
       padding: 8px 0;
+      margin-bottom: 4px;
     `;
 
     // Element header (clickable to highlight object)
     const header = document.createElement("div");
     header.style.cssText = `
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
-      color: var(--text-secondary, rgba(255, 255, 255, 0.72));
-      padding-bottom: 4px;
+      color: var(--text-primary, rgba(255, 255, 255, 0.95));
+      padding-bottom: 6px;
       border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
       display: flex;
       justify-content: space-between;
@@ -1060,16 +972,21 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
       cursor: pointer;
       transition: color 0.15s ease;
     `;
+
+    // Count sensors for badge
+    const sensorCount = data.sensors.size;
     header.innerHTML = `
-      <span>${data.elementName}</span>
-      <span style="font-size: 9px; opacity: 0.6;">GUID: ${guid.substring(0, 8)}...</span>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span>${data.elementName}</span>
+        <span class="sidebar-badge muted">${sensorCount}</span>
+      </div>
     `;
-    header.title = "Click to highlight this element in the 3D view";
+    header.title = t('clickToHighlight');
     header.onmouseenter = () => {
-      header.style.color = "var(--bim-ui--color-accent, #3b82f6)";
+      header.style.color = "var(--accent, #3b82f6)";
     };
     header.onmouseleave = () => {
-      header.style.color = "var(--text-secondary, rgba(255, 255, 255, 0.72))";
+      header.style.color = "var(--text-primary, rgba(255, 255, 255, 0.95))";
     };
     header.onclick = async () => {
       const mapping = guidToExpressId.get(guid);
@@ -1086,13 +1003,12 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
     // Sensor readings
     for (const [sensorType, reading] of data.sensors) {
       const statusColor = getStatusColor(reading.status);
-      const statusBgColor = getStatusBgColor(reading.status);
 
       const sensorDiv = document.createElement("div");
       sensorDiv.style.cssText = `
         display: flex;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
+        gap: 4px;
         padding: 8px 10px;
         background: var(--surface-base, #161922);
         border-radius: 6px;
@@ -1102,18 +1018,22 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
       `;
 
       const sensorIcon = getSensorIcon(sensorType);
-      const sensorLabel = sensorType.charAt(0).toUpperCase() + sensorType.slice(1);
+      const sensorLabel = getSensorTypeLabel(sensorType);
 
       sensorDiv.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="opacity: 0.7;">${sensorIcon}</span>
-          <span style="font-size: 11px; color: var(--text-secondary, rgba(255, 255, 255, 0.72));">${sensorLabel}</span>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 14px;">${sensorIcon}</span>
+            <span style="font-size: 11px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); text-transform: uppercase; letter-spacing: 0.3px;">${sensorLabel}</span>
+          </div>
+          ${reading.status !== "normal" ? `<span class="sidebar-badge ${reading.status === 'warning' ? 'warning' : 'danger'}">${getStatusLabel(reading.status)}</span>` : ""}
         </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 13px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">${reading.value}</span>
-          <span style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50));">${reading.unit}</span>
-          ${reading.status !== "normal" ? `<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: ${statusBgColor}; color: ${statusColor};">${reading.status.toUpperCase()}</span>` : ""}
-          <span style="font-size: 10px; opacity: 0.4; margin-left: 4px;">📈</span>
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <div style="display: flex; align-items: baseline; gap: 3px;">
+            <span style="font-size: 16px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">${reading.value}</span>
+            <span style="font-size: 11px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50));">${reading.unit}</span>
+          </div>
+          <span style="font-size: 12px; opacity: 0.5;" title="${t('clickToViewTrend')}">📈</span>
         </div>
       `;
 
@@ -1132,7 +1052,7 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
         openSensorChart(guid, data.elementName, sensorType, reading.value, reading.unit);
       };
 
-      sensorDiv.title = "Click to view historical trend";
+      sensorDiv.title = t('clickToViewTrend');
 
       elementDiv.appendChild(sensorDiv);
     }
@@ -1145,7 +1065,7 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
       text-align: right;
       padding-top: 4px;
     `;
-    lastUpdated.textContent = `Updated: ${data.lastUpdated.toLocaleTimeString()}`;
+    lastUpdated.textContent = `${t('lastUpdated')}: ${data.lastUpdated.toLocaleTimeString()}`;
     elementDiv.appendChild(lastUpdated);
 
     container.appendChild(elementDiv);
@@ -1194,7 +1114,7 @@ const openSensorChart = async (
   closeSensorChart();
 
   const config = BMSApi.getSensorConfig(sensorType);
-  const sensorLabel = sensorType.charAt(0).toUpperCase() + sensorType.slice(1);
+  const sensorLabel = getSensorTypeLabel(sensorType);
   const sensorIcon = getSensorIcon(sensorType);
 
   // Create overlay
@@ -1249,7 +1169,7 @@ const openSensorChart = async (
       <span style="font-size: 20px;">${sensorIcon}</span>
       <div>
         <div style="font-size: 14px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">
-          ${sensorLabel} Trend
+          ${sensorLabel} ${t('sensorTrend')}
         </div>
         <div style="font-size: 11px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50));">
           ${elementName}
@@ -1258,9 +1178,9 @@ const openSensorChart = async (
     </div>
     <div style="display: flex; align-items: center; gap: 12px;">
       <div id="time-range-selector" style="display: flex; gap: 4px;">
-        <button data-hours="24" class="time-btn active" style="padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10)); background: var(--accent, #3b82f6); color: white; font-size: 11px; cursor: pointer;">24h</button>
-        <button data-hours="168" class="time-btn" style="padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10)); background: transparent; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); font-size: 11px; cursor: pointer;">7d</button>
-        <button data-hours="720" class="time-btn" style="padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10)); background: transparent; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); font-size: 11px; cursor: pointer;">30d</button>
+        <button data-hours="24" class="time-btn active" style="padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10)); background: var(--accent, #3b82f6); color: white; font-size: 11px; cursor: pointer;">${t('hours24')}</button>
+        <button data-hours="168" class="time-btn" style="padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10)); background: transparent; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); font-size: 11px; cursor: pointer;">${t('days7')}</button>
+        <button data-hours="720" class="time-btn" style="padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10)); background: transparent; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); font-size: 11px; cursor: pointer;">${t('days30')}</button>
       </div>
       <button id="close-chart-btn" style="width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10)); background: transparent; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
     </div>
@@ -1289,19 +1209,19 @@ const openSensorChart = async (
   `;
   footer.innerHTML = `
     <div style="text-align: center;">
-      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">Current</div>
+      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">${t('current')}</div>
       <div style="font-size: 16px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">${currentValue} ${unit}</div>
     </div>
     <div style="text-align: center;">
-      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">Min</div>
+      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">${t('min')}</div>
       <div id="stat-min" style="font-size: 16px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">--</div>
     </div>
     <div style="text-align: center;">
-      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">Max</div>
+      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">${t('max')}</div>
       <div id="stat-max" style="font-size: 16px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">--</div>
     </div>
     <div style="text-align: center;">
-      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">Average</div>
+      <div style="font-size: 10px; color: var(--text-tertiary, rgba(255, 255, 255, 0.50)); text-transform: uppercase; margin-bottom: 4px;">${t('average')}</div>
       <div id="stat-avg" style="font-size: 16px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">--</div>
     </div>
   `;
@@ -1563,7 +1483,7 @@ const renderDocumentsEmptyState = (container: HTMLElement) => {
         <line x1="16" y1="17" x2="8" y2="17"/>
         <polyline points="10,9 9,9 8,9"/>
       </svg>
-      <span style="font-size: 13px; line-height: 1.4;">Select an element to view<br/>linked documents</span>
+      <span style="font-size: 13px; line-height: 1.4;">${t('selectElementForDocuments')}</span>
     </div>
   `;
 };
@@ -1586,7 +1506,7 @@ const renderDocumentsNoDocsState = (container: HTMLElement, guid: string | null)
         <line x1="12" y1="18" x2="12" y2="12"/>
         <line x1="9" y1="15" x2="15" y2="15"/>
       </svg>
-      <span style="font-size: 13px; line-height: 1.4;">No documents linked<br/>to this element</span>
+      <span style="font-size: 13px; line-height: 1.4;">${t('noDocumentsLinked')}</span>
       ${guid ? `
         <label style="
           display: inline-flex;
@@ -1607,7 +1527,7 @@ const renderDocumentsNoDocsState = (container: HTMLElement, guid: string | null)
             <polyline points="17,8 12,3 7,8"/>
             <line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
-          Upload Document
+          ${t('uploadDocument')}
           <input type="file" id="document-upload-input" style="display: none;" multiple />
         </label>
       ` : ""}
@@ -1655,7 +1575,7 @@ const renderDocumentsList = (container: HTMLElement, documentsMap: Map<string, S
           <polyline points="17,8 12,3 7,8"/>
           <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
-        Add Document
+        ${t('addDocument')}
         <input type="file" id="document-upload-input" style="display: none;" multiple />
       </label>
     `;
@@ -1667,37 +1587,12 @@ const renderDocumentsList = (container: HTMLElement, documentsMap: Map<string, S
     }
   }
 
-  // List documents by GUID
-  for (const [guid, documents] of documentsMap) {
-    const guidSection = document.createElement("div");
-    guidSection.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 16px;
-    `;
-
-    // GUID header (abbreviated)
-    const guidHeader = document.createElement("div");
-    guidHeader.style.cssText = `
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--text-tertiary, rgba(255, 255, 255, 0.40));
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-    `;
-    guidHeader.textContent = `GUID: ${guid.substring(0, 12)}...`;
-    guidSection.appendChild(guidHeader);
-
-    // Document items
+  // List documents (without GUID headers for compactness)
+  for (const [, documents] of documentsMap) {
     for (const doc of documents) {
       const docItem = createDocumentItem(doc);
-      guidSection.appendChild(docItem);
+      container.appendChild(docItem);
     }
-
-    container.appendChild(guidSection);
   }
 };
 
@@ -1706,177 +1601,117 @@ const createDocumentItem = (doc: StoredDocument): HTMLElement => {
   item.style.cssText = `
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 14px;
+    gap: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
     background: var(--surface-base, #161922);
-    border-radius: 8px;
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-    transition: all 150ms ease-out;
+    border-radius: 6px;
+    border-left: 3px solid var(--accent, #3b82f6);
+    transition: background 0.15s ease;
   `;
   item.onmouseover = () => {
     item.style.background = "var(--surface-raised, #1c1f2a)";
-    item.style.borderColor = "rgba(255, 255, 255, 0.1)";
   };
   item.onmouseout = () => {
     item.style.background = "var(--surface-base, #161922)";
-    item.style.borderColor = "rgba(255, 255, 255, 0.06)";
   };
 
   const icon = DocumentStore.getFileIcon(doc.fileType);
-  const size = DocumentStore.formatFileSize(doc.fileSize);
-  const typeLabel = DocumentStore.getDocumentTypeLabel(doc.documentType);
-  const createdDate = doc.createdDate.toLocaleDateString();
+  const typeLabel = getDocumentTypeLabel(doc.documentType);
 
   item.innerHTML = `
-    <div style="display: flex; align-items: flex-start; gap: 12px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 16px; flex-shrink: 0;">${icon}</span>
       <span style="
-        font-size: 28px;
-        line-height: 1;
-        flex-shrink: 0;
-      ">${icon}</span>
-      <div style="flex: 1; min-width: 0;">
-        <div style="
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--text-primary, rgba(255, 255, 255, 0.95));
-          line-height: 1.3;
-          word-break: break-word;
-        " title="${doc.displayName} (${doc.fileName})">${doc.displayName}</div>
-        <div style="
-          display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 8px;
-          font-size: 11px;
-          color: var(--text-tertiary, rgba(255, 255, 255, 0.50));
-          margin-top: 6px;
-        ">
-          <span style="
-            padding: 3px 8px;
-            background: var(--surface-overlay, #232733);
-            border-radius: 4px;
-            font-weight: 500;
-            font-size: 10px;
-          ">${typeLabel}</span>
-          <span>${size}</span>
-          <span style="opacity: 0.5;">•</span>
-          <span>${createdDate}</span>
-        </div>
-      </div>
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-primary, rgba(255, 255, 255, 0.95));
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      " title="${doc.displayName} (${doc.fileName})">${doc.displayName}</span>
     </div>
     ${doc.description ? `
       <div style="
-        font-size: 12px;
-        color: var(--text-secondary, rgba(255, 255, 255, 0.65));
+        font-size: 11px;
+        color: var(--text-tertiary, rgba(255, 255, 255, 0.60));
         line-height: 1.4;
-        padding-left: 40px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
       " title="${doc.description}">${doc.description}</div>
     ` : ""}
-    <div style="
-      display: flex;
-      gap: 8px;
-      padding-top: 4px;
-      border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-    ">
-      <button class="doc-view-btn" data-doc-id="${doc.id}" style="
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        flex: 1;
-        height: 32px;
-        border: none;
-        border-radius: 6px;
-        background: var(--accent-muted, rgba(59, 130, 246, 0.15));
-        color: var(--accent, #3b82f6);
-        cursor: pointer;
-        font-size: 11px;
-        font-weight: 500;
-        transition: background 150ms ease-out;
-      " title="View">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-        View
-      </button>
-      <button class="doc-edit-btn" data-doc-id="${doc.id}" style="
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        flex: 1;
-        height: 32px;
-        border: none;
-        border-radius: 6px;
-        background: var(--surface-raised, #1c1f2a);
-        color: var(--text-secondary, rgba(255, 255, 255, 0.72));
-        cursor: pointer;
-        font-size: 11px;
-        font-weight: 500;
-        transition: background 150ms ease-out;
-      " title="Edit">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-        </svg>
-        Edit
-      </button>
-      <button class="doc-download-btn" data-doc-id="${doc.id}" style="
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border: none;
-        border-radius: 6px;
-        background: var(--surface-raised, #1c1f2a);
-        color: var(--text-secondary, rgba(255, 255, 255, 0.72));
-        cursor: pointer;
-        flex-shrink: 0;
-        transition: background 150ms ease-out;
-      " title="Download">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-          <polyline points="7,10 12,15 17,10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-      </button>
-      <button class="doc-delete-btn" data-doc-id="${doc.id}" style="
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border: none;
-        border-radius: 6px;
-        background: rgba(255, 68, 68, 0.1);
-        color: #ff6666;
-        cursor: pointer;
-        flex-shrink: 0;
-        transition: background 150ms ease-out;
-      " title="Delete">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3,6 5,6 21,6"/>
-          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-        </svg>
-      </button>
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <span class="sidebar-badge">${typeLabel}</span>
+      <div style="display: flex; gap: 4px;">
+        <button class="doc-view-btn" data-doc-id="${doc.id}" style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border: none;
+          border-radius: 4px;
+          background: var(--accent-muted, rgba(59, 130, 246, 0.15));
+          color: var(--accent, #3b82f6);
+          cursor: pointer;
+          transition: background 150ms ease-out;
+        " title="${t('view')}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+        <button class="doc-download-btn" data-doc-id="${doc.id}" style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border: none;
+          border-radius: 4px;
+          background: var(--surface-raised, #1c1f2a);
+          color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+          cursor: pointer;
+          transition: background 150ms ease-out;
+        " title="${t('download')}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7,10 12,15 17,10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
+        <button class="doc-delete-btn" data-doc-id="${doc.id}" style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border: none;
+          border-radius: 4px;
+          background: rgba(255, 68, 68, 0.1);
+          color: #ff6666;
+          cursor: pointer;
+          transition: background 150ms ease-out;
+        " title="${t('delete')}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3,6 5,6 21,6"/>
+            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+          </svg>
+        </button>
+      </div>
     </div>
   `;
 
   // Add event listeners
   const viewBtn = item.querySelector(".doc-view-btn") as HTMLButtonElement;
-  const editBtn = item.querySelector(".doc-edit-btn") as HTMLButtonElement;
   const downloadBtn = item.querySelector(".doc-download-btn") as HTMLButtonElement;
   const deleteBtn = item.querySelector(".doc-delete-btn") as HTMLButtonElement;
 
   viewBtn.onmouseover = () => viewBtn.style.background = "rgba(59, 130, 246, 0.25)";
   viewBtn.onmouseout = () => viewBtn.style.background = "rgba(59, 130, 246, 0.15)";
   viewBtn.onclick = () => showDocumentViewer(doc);
-
-  editBtn.onmouseover = () => editBtn.style.background = "var(--surface-overlay, #232733)";
-  editBtn.onmouseout = () => editBtn.style.background = "var(--surface-raised, #1c1f2a)";
-  editBtn.onclick = () => handleEditDocument(doc);
 
   downloadBtn.onmouseover = () => downloadBtn.style.background = "var(--surface-overlay, #232733)";
   downloadBtn.onmouseout = () => downloadBtn.style.background = "var(--surface-raised, #1c1f2a)";
@@ -1987,8 +1822,8 @@ const showDocumentModal = (options: DocumentModalOptions) => {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   `;
 
-  const title = options.mode === "create" ? "Upload Document" : "Edit Document";
-  const saveLabel = options.mode === "create" ? "Upload" : "Save";
+  const title = options.mode === "create" ? t('uploadDocument') : t('edit') + ' ' + t('documents').toLowerCase();
+  const saveLabel = options.mode === "create" ? t('upload') : t('save');
 
   // Format date for input
   const formatDateForInput = (date: Date): string => {
@@ -2007,7 +1842,7 @@ const showDocumentModal = (options: DocumentModalOptions) => {
       <!-- Display Name -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 11px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72));">
-          Document Name *
+          ${t('documentName')}
         </label>
         <input type="text" id="doc-modal-name" value="${options.initialData.displayName}" style="
           padding: 10px 12px;
@@ -2018,13 +1853,13 @@ const showDocumentModal = (options: DocumentModalOptions) => {
           font-size: 13px;
           outline: none;
           transition: border-color 150ms ease-out;
-        " placeholder="Enter document name" />
+        " placeholder="${t('enterDocumentName')}" />
       </div>
 
       <!-- Document Type -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 11px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72));">
-          Document Type
+          ${t('documentType')}
         </label>
         <select id="doc-modal-type" style="
           padding: 10px 12px;
@@ -2036,9 +1871,9 @@ const showDocumentModal = (options: DocumentModalOptions) => {
           outline: none;
           cursor: pointer;
         ">
-          ${DOCUMENT_TYPES.map(t => `
-            <option value="${t.value}" ${t.value === options.initialData.documentType ? "selected" : ""}>
-              ${t.label}
+          ${getDocumentTypes().map(docType => `
+            <option value="${docType.value}" ${docType.value === options.initialData.documentType ? "selected" : ""}>
+              ${docType.label}
             </option>
           `).join("")}
         </select>
@@ -2047,7 +1882,7 @@ const showDocumentModal = (options: DocumentModalOptions) => {
       <!-- Created Date -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 11px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72));">
-          Document Date
+          ${t('documentDate')}
         </label>
         <input type="date" id="doc-modal-date" value="${formatDateForInput(options.initialData.createdDate)}" style="
           padding: 10px 12px;
@@ -2064,7 +1899,7 @@ const showDocumentModal = (options: DocumentModalOptions) => {
       <!-- Description -->
       <div style="display: flex; flex-direction: column; gap: 6px;">
         <label style="font-size: 11px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72));">
-          Description (optional)
+          ${t('descriptionOptional')}
         </label>
         <textarea id="doc-modal-description" rows="3" style="
           padding: 10px 12px;
@@ -2076,7 +1911,7 @@ const showDocumentModal = (options: DocumentModalOptions) => {
           outline: none;
           resize: vertical;
           font-family: inherit;
-        " placeholder="Add a description...">${options.initialData.description || ""}</textarea>
+        " placeholder="${t('addDescription')}">${options.initialData.description || ""}</textarea>
       </div>
     </div>
 
@@ -2092,7 +1927,7 @@ const showDocumentModal = (options: DocumentModalOptions) => {
         font-weight: 500;
         cursor: pointer;
         transition: all 150ms ease-out;
-      ">Cancel</button>
+      ">${t('cancel')}</button>
       <button id="doc-modal-save" style="
         padding: 10px 18px;
         background: var(--accent, #3b82f6);
@@ -2162,7 +1997,7 @@ const showDocumentModal = (options: DocumentModalOptions) => {
     const description = (modal.querySelector("#doc-modal-description") as HTMLTextAreaElement).value.trim();
 
     if (!displayName) {
-      alert("Please enter a document name.");
+      alert(t('pleaseEnterDocumentName'));
       return;
     }
 
@@ -2215,7 +2050,7 @@ const handleEditDocument = async (doc: StoredDocument) => {
 const showDocumentViewer = async (doc: StoredDocument) => {
   const viewData = await DocumentStore.getDocumentViewUrl(doc.id);
   if (!viewData) {
-    alert("Could not load document for viewing.");
+    alert(t('loading'));
     return;
   }
 
@@ -2306,7 +2141,7 @@ const showDocumentViewer = async (doc: StoredDocument) => {
       <polyline points="7,10 12,15 17,10"/>
       <line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
-    Download
+    ${t('download')}
   `;
   downloadBtn.onmouseover = () => downloadBtn.style.background = "rgba(59, 130, 246, 0.25)";
   downloadBtn.onmouseout = () => downloadBtn.style.background = "rgba(59, 130, 246, 0.15)";
@@ -2333,6 +2168,7 @@ const showDocumentViewer = async (doc: StoredDocument) => {
       <line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   `;
+  closeBtn.title = t('close');
   closeBtn.onmouseover = () => closeBtn.style.background = "var(--surface-overlay, #232733)";
   closeBtn.onmouseout = () => closeBtn.style.background = "var(--surface-raised, #1c1f2a)";
 
@@ -2795,10 +2631,10 @@ const updateViewButtons = () => {
 };
 
 // Left panel - Properties (swapped from right)
-const leftPanel = BUI.Component.create(() => {
+const createLeftPanel = () => BUI.Component.create(() => {
   return BUI.html`
-   <bim-panel label="Properties" style="display: flex; flex-direction: column; height: 100%;">
-    <bim-panel-section label="Element Properties" icon="mdi:information-outline">
+   <bim-panel label="${t('properties')}" style="display: flex; flex-direction: column; height: 100%;">
+    <bim-panel-section label="${t('elementProperties')}" icon="mdi:information-outline">
       <div id="properties-container" style="min-height: 100px;">
         <div id="properties-empty-state" style="
           display: flex;
@@ -2813,24 +2649,25 @@ const leftPanel = BUI.Component.create(() => {
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
           </svg>
-          <span style="font-size: 12px; font-weight: 500;">No element selected</span>
-          <span style="font-size: 11px; margin-top: 4px; opacity: 0.7;">Click on a model element to view its properties</span>
+          <span style="font-size: 12px; font-weight: 500;">${t('noElementSelected')}</span>
+          <span style="font-size: 11px; margin-top: 4px; opacity: 0.7;">${t('clickToViewProperties')}</span>
         </div>
         ${propertiesTable}
       </div>
     </bim-panel-section>
-    <bim-panel-section label="BMS Sensors" icon="mdi:gauge">
-      <div id="bms-sensor-container" style="min-height: 80px;"></div>
+    <bim-panel-section label="${t('bmsSensors')}" icon="mdi:gauge">
+      <div id="bms-sensor-container" style="min-height: 100px;"></div>
     </bim-panel-section>
-    <bim-panel-section label="Documents" icon="mdi:file-document-multiple">
-      <div id="documents-container" style="min-height: 80px;"></div>
+    <bim-panel-section label="${t('documents')}" icon="mdi:file-document-multiple">
+      <div id="documents-container" style="min-height: 100px;"></div>
     </bim-panel-section>
    </bim-panel>
   `;
 });
+let leftPanel = createLeftPanel();
 
 // Right panel - Trees (swapped from left)
-const rightPanel = BUI.Component.create(() => {
+const createRightPanel = () => BUI.Component.create(() => {
   const onSearch = (e: Event) => {
     const input = e.target as BUI.TextInput;
     spatialTree.queryString = input.value;
@@ -2892,52 +2729,53 @@ const rightPanel = BUI.Component.create(() => {
   };
 
   return BUI.html`
-   <bim-panel label="Model">
-    <bim-panel-section label="Spatial Tree">
-      <bim-text-input @input=${onSearch} placeholder="Search..." debounce="200"></bim-text-input>
+   <bim-panel label="${t('model')}">
+    <bim-panel-section label="${t('spatialTree')}">
+      <bim-text-input @input=${onSearch} placeholder="${t('search')}" debounce="200"></bim-text-input>
       ${spatialTree}
     </bim-panel-section>
-    <bim-panel-section label="Property Filter" icon="mdi:filter">
-      <div style="display: flex; flex-direction: column; gap: 8px;">
+    <bim-panel-section label="${t('propertyFilter')}" icon="mdi:filter">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
         <!-- Add filter buttons -->
-        <div style="display: flex; gap: 4px;">
-          <bim-button @click=${onAddCategoryFilter} label="+ Category" style="flex: 1;"></bim-button>
-          <bim-button @click=${onAddAttributeFilter} label="+ Attribute" style="flex: 1;"></bim-button>
+        <div style="display: flex; gap: 8px;">
+          <bim-button @click=${onAddCategoryFilter} label="${t('addCategory')}" style="flex: 1;"></bim-button>
+          <bim-button @click=${onAddAttributeFilter} label="${t('addAttribute')}" style="flex: 1;"></bim-button>
         </div>
 
         <!-- Aggregation toggle -->
-        <bim-checkbox @change=${onAggregationChange} label="Match ALL conditions (AND)" style="font-size: 11px;"></bim-checkbox>
+        <bim-checkbox @change=${onAggregationChange} label="${t('matchAllConditions')}" style="font-size: 13px;"></bim-checkbox>
 
         <!-- Filter conditions container -->
-        <div id="filter-conditions-container" style="max-height: 300px; overflow-y: auto;"></div>
+        <div id="filter-conditions-container" style="max-height: 320px; overflow-y: auto;"></div>
 
         <!-- Result count -->
         <div id="filter-result-count" style="
-          font-size: 11px;
+          font-size: 13px;
+          font-weight: 500;
           color: var(--text-secondary, rgba(255, 255, 255, 0.72));
           text-align: center;
-          padding: 4px;
+          padding: 8px;
+          background: var(--surface-base, #161922);
+          border-radius: 6px;
         "></div>
 
         <!-- Action buttons -->
-        <div style="display: flex; gap: 4px;">
-          <bim-button @click=${onApplyFilter} label="Apply" icon="mdi:check" style="flex: 1;"></bim-button>
-          <bim-button @click=${onClearFilters} label="Clear" icon="mdi:close" style="flex: 1;"></bim-button>
+        <div style="display: flex; gap: 8px;">
+          <bim-button @click=${onApplyFilter} label="${t('apply')}" icon="mdi:check" style="flex: 1;"></bim-button>
+          <bim-button @click=${onClearFilters} label="${t('clear')}" icon="mdi:close" style="flex: 1;"></bim-button>
         </div>
 
         <!-- Visibility actions for filtered results -->
-        <div style="display: flex; gap: 4px; border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); padding-top: 8px; margin-top: 4px;">
-          <bim-button @click=${onIsolateFiltered} label="Isolate" icon="mdi:eye-outline" tooltip="Show only filtered elements" style="flex: 1;"></bim-button>
-          <bim-button @click=${onHideFiltered} label="Hide" icon="mdi:eye-off-outline" tooltip="Hide filtered elements" style="flex: 1;"></bim-button>
+        <div style="display: flex; gap: 8px; border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); padding-top: 12px; margin-top: 4px;">
+          <bim-button @click=${onIsolateFiltered} label="${t('isolate')}" icon="mdi:eye-outline" style="flex: 1;"></bim-button>
+          <bim-button @click=${onHideFiltered} label="${t('hide')}" icon="mdi:eye-off-outline" style="flex: 1;"></bim-button>
         </div>
       </div>
-    </bim-panel-section>
-    <bim-panel-section label="Systems" icon="mdi:pipe">
-      <div id="systems-tree-container" style="display: flex; flex-direction: column; gap: 4px;"></div>
     </bim-panel-section>
    </bim-panel>
   `;
 });
+let rightPanel = createRightPanel();
 
 // Create floating toolbar
 const createFloatingToolbar = () => {
@@ -3100,7 +2938,7 @@ const createFloatingToolbar = () => {
       #views-toolbar {
         position: fixed;
         top: 20px;
-        right: calc(20rem + 12px);
+        right: calc(320px + 12px);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -3116,7 +2954,7 @@ const createFloatingToolbar = () => {
       }
 
       #views-toolbar.sidebar-collapsed {
-        right: 12px;
+        right: 12px !important;
       }
 
       #views-toolbar .toolbar-section {
@@ -3222,17 +3060,17 @@ const createFloatingToolbar = () => {
     <!-- Navigation section -->
     <div class="toolbar-section">
       <div class="toolbar-group">
-        <button class="toolbar-btn active" id="nav-orbit" data-tooltip="Orbit">
+        <button class="toolbar-btn active" id="nav-orbit" data-tooltip="${t('orbit')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/></svg>
         </button>
-        <button class="toolbar-btn" id="nav-firstperson" data-tooltip="First Person">
+        <button class="toolbar-btn" id="nav-firstperson" data-tooltip="${t('firstPerson')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 14a3 3 0 100-5 3 3 0 000 5z"/><path d="M3 12s4-7 9-7 9 7 9 7-4 7-9 7-9-7-9-7z"/></svg>
         </button>
-        <button class="toolbar-btn" id="nav-plan" data-tooltip="Plan View">
+        <button class="toolbar-btn" id="nav-plan" data-tooltip="${t('planView')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 9h16M9 20V9"/></svg>
         </button>
       </div>
-      <span class="toolbar-section-label">Navigate</span>
+      <span class="toolbar-section-label">${t('navigate')}</span>
     </div>
 
     <div class="toolbar-divider"></div>
@@ -3240,17 +3078,17 @@ const createFloatingToolbar = () => {
     <!-- Measurement section -->
     <div class="toolbar-section">
       <div class="toolbar-group">
-        <button class="toolbar-btn" id="measure-length" data-tooltip="Length">
+        <button class="toolbar-btn" id="measure-length" data-tooltip="${t('length')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19L19 5"/><path d="M5 19l2-4M5 19l-2 2M19 5l-2 4M19 5l2-2"/></svg>
         </button>
-        <button class="toolbar-btn" id="measure-area" data-tooltip="Area">
+        <button class="toolbar-btn" id="measure-area" data-tooltip="${t('area')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16"/><path d="M4 4l16 16"/></svg>
         </button>
-        <button class="toolbar-btn" id="measure-clear" data-tooltip="Clear">
+        <button class="toolbar-btn" id="measure-clear" data-tooltip="${t('clearMeasurements')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>
         </button>
       </div>
-      <span class="toolbar-section-label">Measure</span>
+      <span class="toolbar-section-label">${t('measure')}</span>
     </div>
 
     <div class="toolbar-divider"></div>
@@ -3258,17 +3096,17 @@ const createFloatingToolbar = () => {
     <!-- Section planes section -->
     <div class="toolbar-section">
       <div class="toolbar-group">
-        <button class="toolbar-btn" id="clip-toggle" data-tooltip="Section">
+        <button class="toolbar-btn" id="clip-toggle" data-tooltip="${t('createSection')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
         </button>
-        <button class="toolbar-btn active" id="clip-visibility" data-tooltip="Show Planes">
+        <button class="toolbar-btn active" id="clip-visibility" data-tooltip="${t('showPlanes')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
-        <button class="toolbar-btn" id="clip-clear" data-tooltip="Delete All">
+        <button class="toolbar-btn" id="clip-clear" data-tooltip="${t('deleteAll')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>
         </button>
       </div>
-      <span class="toolbar-section-label">Section</span>
+      <span class="toolbar-section-label">${t('section')}</span>
     </div>
 
     <div class="toolbar-divider"></div>
@@ -3276,20 +3114,20 @@ const createFloatingToolbar = () => {
     <!-- Visibility section -->
     <div class="toolbar-section">
       <div class="toolbar-group">
-        <button class="toolbar-btn" id="visibility-ghost" data-tooltip="Ghost">
+        <button class="toolbar-btn" id="visibility-ghost" data-tooltip="${t('ghost')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" opacity="0.5"/><circle cx="9" cy="10" r="1.5"/><circle cx="15" cy="10" r="1.5"/><path d="M8 16s1.5 2 4 2 4-2 4-2"/></svg>
         </button>
-        <button class="toolbar-btn" id="visibility-isolate" data-tooltip="Isolate">
+        <button class="toolbar-btn" id="visibility-isolate" data-tooltip="${t('isolate')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2"/></svg>
         </button>
-        <button class="toolbar-btn" id="visibility-hide" data-tooltip="Hide">
+        <button class="toolbar-btn" id="visibility-hide" data-tooltip="${t('hide')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
         </button>
-        <button class="toolbar-btn" id="visibility-show" data-tooltip="Show All">
+        <button class="toolbar-btn" id="visibility-show" data-tooltip="${t('showAll')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
-      <span class="toolbar-section-label">Visibility</span>
+      <span class="toolbar-section-label">${t('visibility')}</span>
     </div>
 
   `;
@@ -3302,23 +3140,23 @@ const createFloatingToolbar = () => {
   viewsToolbar.innerHTML = `
     <div class="toolbar-section">
       <div class="toolbar-group">
-        <button class="toolbar-btn" id="views-floors" data-tooltip="Floor Plans">
+        <button class="toolbar-btn" id="views-floors" data-tooltip="${t('floorPlans')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18"/></svg>
         </button>
-        <button class="toolbar-btn" id="views-elevations" data-tooltip="Elevations">
+        <button class="toolbar-btn" id="views-elevations" data-tooltip="${t('elevations')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-5h6v5"/></svg>
         </button>
-        <button class="toolbar-btn" id="views-exit" data-tooltip="Exit 2D">
+        <button class="toolbar-btn" id="views-exit" data-tooltip="${t('exit2D')}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
         </button>
-        <button class="toolbar-btn" id="btn-views-list" data-tooltip="Saved Views" style="position: relative;">
+        <button class="toolbar-btn" id="btn-views-list" data-tooltip="${t('savedViews')}" style="position: relative;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
           <div class="toolbar-dropdown" id="dropdown-views">
             <div id="view-buttons-container" style="display: flex; flex-direction: column; gap: 3px;"></div>
           </div>
         </button>
       </div>
-      <span class="toolbar-section-label">Views</span>
+      <span class="toolbar-section-label">${t('views')}</span>
     </div>
   `;
   document.body.appendChild(viewsToolbar);
@@ -3481,7 +3319,7 @@ app.layouts = {
   main: {
     template: `
       "rightPanel viewport leftPanel"
-      / 20rem 1fr 20rem
+      / 320px 1fr 320px
     `,
     elements: { leftPanel, viewport, rightPanel },
   },
@@ -3496,6 +3334,12 @@ createFloatingToolbar();
 let modelPanelCollapsed = false;
 let propertiesPanelCollapsed = false;
 let isResizing = false;
+
+// Panel widths (in pixels) - resizable
+let leftPanelWidth = 320; // 20rem default
+let rightPanelWidth = 320; // 20rem default
+const MIN_PANEL_WIDTH = 240; // minimum width
+const MAX_PANEL_WIDTH = 480; // maximum width
 
 // Create sidebar toggle buttons
 const createSidebarToggles = () => {
@@ -3525,23 +3369,23 @@ const createSidebarToggles = () => {
     }
 
     .sidebar-toggle.left {
-      left: 20rem;
+      left: 320px;
       border-left: none;
       border-radius: 0 6px 6px 0;
     }
 
     .sidebar-toggle.left.collapsed {
-      left: 0;
+      left: 0 !important;
     }
 
     .sidebar-toggle.right {
-      right: 20rem;
+      right: 320px;
       border-right: none;
       border-radius: 6px 0 0 6px;
     }
 
     .sidebar-toggle.right.collapsed {
-      right: 0;
+      right: 0 !important;
     }
 
     .sidebar-toggle svg {
@@ -3603,14 +3447,174 @@ const createSidebarToggles = () => {
   document.body.appendChild(rightToggle);
 };
 
+// Create resize handles for panels
+const createResizeHandles = () => {
+  const style = document.createElement("style");
+  style.textContent = `
+    .panel-resize-handle {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      cursor: col-resize;
+      z-index: 1000;
+      background: transparent;
+      transition: background 150ms ease;
+    }
+    .panel-resize-handle:hover,
+    .panel-resize-handle.dragging {
+      background: var(--accent, #3b82f6);
+    }
+    .panel-resize-handle::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px;
+      height: 32px;
+      background: var(--text-tertiary, rgba(255, 255, 255, 0.3));
+      border-radius: 1px;
+      opacity: 0;
+      transition: opacity 150ms ease;
+    }
+    .panel-resize-handle:hover::after,
+    .panel-resize-handle.dragging::after {
+      opacity: 1;
+    }
+    .panel-resize-handle.left {
+      left: ${leftPanelWidth}px;
+    }
+    .panel-resize-handle.right {
+      right: ${rightPanelWidth}px;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // Left panel resize handle
+  const leftHandle = document.createElement("div");
+  leftHandle.className = "panel-resize-handle left";
+  leftHandle.id = "left-resize-handle";
+  document.body.appendChild(leftHandle);
+
+  // Right panel resize handle
+  const rightHandle = document.createElement("div");
+  rightHandle.className = "panel-resize-handle right";
+  rightHandle.id = "right-resize-handle";
+  document.body.appendChild(rightHandle);
+
+  // Drag state
+  let isDragging = false;
+  let currentHandle: "left" | "right" | null = null;
+  let startX = 0;
+  let startWidth = 0;
+
+  const updateHandlePositions = () => {
+    // Update resize handles
+    leftHandle.style.left = modelPanelCollapsed ? "-10px" : `${leftPanelWidth}px`;
+    rightHandle.style.right = propertiesPanelCollapsed ? "-10px" : `${rightPanelWidth}px`;
+    leftHandle.style.display = modelPanelCollapsed ? "none" : "block";
+    rightHandle.style.display = propertiesPanelCollapsed ? "none" : "block";
+
+    // Update toggle button positions
+    const leftToggle = document.getElementById("left-sidebar-toggle");
+    const rightToggle = document.getElementById("right-sidebar-toggle");
+    if (leftToggle && !modelPanelCollapsed) {
+      leftToggle.style.left = `${leftPanelWidth}px`;
+    }
+    if (rightToggle && !propertiesPanelCollapsed) {
+      rightToggle.style.right = `${rightPanelWidth}px`;
+    }
+
+    // Update views toolbar position
+    const viewsToolbar = document.getElementById("views-toolbar");
+    if (viewsToolbar && !propertiesPanelCollapsed) {
+      viewsToolbar.style.right = `${rightPanelWidth + 12}px`;
+    }
+  };
+
+  const onMouseDown = (e: MouseEvent, handle: "left" | "right") => {
+    isDragging = true;
+    currentHandle = handle;
+    startX = e.clientX;
+    startWidth = handle === "left" ? leftPanelWidth : rightPanelWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    (handle === "left" ? leftHandle : rightHandle).classList.add("dragging");
+    blockViewportResize = true;
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!isDragging || !currentHandle) return;
+
+    const deltaX = e.clientX - startX;
+    let newWidth: number;
+
+    if (currentHandle === "left") {
+      newWidth = startWidth + deltaX;
+    } else {
+      newWidth = startWidth - deltaX;
+    }
+
+    // Clamp to min/max
+    newWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, newWidth));
+
+    // Update width
+    if (currentHandle === "left") {
+      leftPanelWidth = newWidth;
+    } else {
+      rightPanelWidth = newWidth;
+    }
+
+    // Update layout immediately (no animation during drag)
+    const appElement = document.getElementById("app");
+    if (appElement) {
+      const leftW = modelPanelCollapsed ? "0" : `${leftPanelWidth}px`;
+      const rightW = propertiesPanelCollapsed ? "0" : `${rightPanelWidth}px`;
+      appElement.style.transition = "none";
+      appElement.style.gridTemplateColumns = `${leftW} 1fr ${rightW}`;
+    }
+
+    updateHandlePositions();
+  };
+
+  const onMouseUp = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    leftHandle.classList.remove("dragging");
+    rightHandle.classList.remove("dragging");
+    currentHandle = null;
+
+    // Trigger resize after drag ends
+    requestAnimationFrame(() => {
+      blockViewportResize = false;
+      rendererComponent.resize();
+      cameraComponent.updateAspect();
+    });
+  };
+
+  leftHandle.addEventListener("mousedown", (e) => onMouseDown(e, "left"));
+  rightHandle.addEventListener("mousedown", (e) => onMouseDown(e, "right"));
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
+
+  // Export updateHandlePositions for use after toggle
+  (window as any).__updateResizeHandles = updateHandlePositions;
+
+  // Initial position
+  updateHandlePositions();
+};
+
 // Update grid layout based on collapsed state
 const updateGridLayout = () => {
   if (isResizing) return;
   isResizing = true;
   blockViewportResize = true;
 
-  const leftWidth = modelPanelCollapsed ? "0" : "20rem";
-  const rightWidth = propertiesPanelCollapsed ? "0" : "20rem";
+  const leftWidth = modelPanelCollapsed ? "0" : `${leftPanelWidth}px`;
+  const rightWidth = propertiesPanelCollapsed ? "0" : `${rightPanelWidth}px`;
 
   // Get panels
   const modelPanel = document.querySelector('bim-panel[label="Model"]') as HTMLElement;
@@ -3652,6 +3656,11 @@ const updateGridLayout = () => {
     viewsToolbar.classList.toggle("sidebar-collapsed", propertiesPanelCollapsed);
   }
 
+  // Update resize handle positions
+  if ((window as any).__updateResizeHandles) {
+    (window as any).__updateResizeHandles();
+  }
+
   // After full transition completes, hide collapsed panels and resize viewport
   setTimeout(() => {
     // Set display:none on collapsed panels after animation completes
@@ -3674,13 +3683,26 @@ const updateGridLayout = () => {
   }, 260);
 };
 
-// Initialize sidebar toggles
+// Initialize sidebar toggles and resize handles
 createSidebarToggles();
+createResizeHandles();
+
+// Set initial grid and positions after DOM is fully ready
+setTimeout(() => {
+  const appElement = document.getElementById("app");
+  if (appElement) {
+    appElement.style.display = "grid";
+    appElement.style.gridTemplateColumns = `${leftPanelWidth}px 1fr ${rightPanelWidth}px`;
+    appElement.style.gridTemplateAreas = '"rightPanel viewport leftPanel"';
+  }
+  if ((window as any).__updateResizeHandles) {
+    (window as any).__updateResizeHandles();
+  }
+}, 100);
 
 // Initialize containers after layout is set
 setTimeout(() => {
   viewButtonsContainer = document.getElementById("view-buttons-container");
-  systemsTreeContainer = document.getElementById("systems-tree-container");
 
   // Initialize filter conditions container with empty state
   const filterContainer = document.getElementById("filter-conditions-container");

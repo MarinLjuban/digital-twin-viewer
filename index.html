@@ -214,10 +214,16 @@
       --bim-label--c: var(--text-secondary);
       color: var(--text-primary);
       border-bottom: 1px solid var(--border-subtle) !important;
+      padding: var(--space-3) var(--space-4) !important;
     }
 
     bim-panel-section:last-child {
       border-bottom: none !important;
+    }
+
+    /* Global section content spacing */
+    bim-panel-section > div {
+      padding: var(--space-2) 0;
     }
 
     bim-button {
@@ -226,9 +232,11 @@
       --bim-button--c: var(--text-primary);
       --bim-label--c: var(--text-primary);
       --bim-icon--c: var(--text-secondary);
-      --bim-ui_size-base: 13px;
-      border-radius: var(--radius-sm) !important;
+      --bim-ui_size-base: 14px;
+      border-radius: var(--radius-md) !important;
       transition: all var(--transition-fast) !important;
+      padding: var(--space-2) var(--space-3) !important;
+      min-height: 36px !important;
     }
 
     bim-button:hover {
@@ -255,7 +263,7 @@
 
     bim-label {
       --bim-label--c: var(--text-secondary);
-      --bim-ui_size-base: 12px;
+      --bim-ui_size-base: 13px;
     }
 
     bim-dropdown {
@@ -278,7 +286,7 @@
       --bim-ui_bg-base: transparent;
       --bim-ui_bg-contrast-10: var(--border-subtle);
       --bim-ui_bg-contrast-20: var(--surface-raised);
-      font-size: 12px;
+      font-size: 13px;
     }
 
     bim-table-row {
@@ -292,7 +300,7 @@
 
     bim-table-cell {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-secondary);
       padding: var(--space-2) var(--space-3) !important;
     }
@@ -366,10 +374,10 @@
     bim-panel[label="Properties"] bim-panel-section:empty::after {
       content: "Select an element to view properties";
       display: block;
-      padding: var(--space-6);
+      padding: var(--space-4);
       text-align: center;
       color: var(--text-muted);
-      font-size: 12px;
+      font-size: 11px;
       font-style: italic;
     }
 
@@ -457,19 +465,59 @@
     /* Panel header refinement */
     bim-panel::part(header) {
       font-weight: 600;
-      font-size: 11px;
+      font-size: 13px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: var(--text-tertiary);
-      padding: var(--space-3) var(--space-4);
+      color: var(--text-secondary);
+      padding: var(--space-4) var(--space-4);
       border-bottom: 1px solid var(--border-subtle);
     }
 
     /* Section header refinement */
     bim-panel-section::part(header) {
-      font-weight: 500;
-      font-size: 12px;
-      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-primary);
+      padding: var(--space-3) 0;
+    }
+
+    /* Section content spacing */
+    bim-panel-section::part(content) {
+      padding: var(--space-3) 0 var(--space-4) 0;
+    }
+
+    /* Badge styles */
+    .sidebar-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 10px;
+      background: var(--accent-muted);
+      color: var(--accent);
+      margin-left: 8px;
+    }
+
+    .sidebar-badge.success {
+      background: var(--status-normal-bg);
+      color: var(--status-normal);
+    }
+
+    .sidebar-badge.warning {
+      background: var(--status-warning-bg);
+      color: var(--status-warning);
+    }
+
+    .sidebar-badge.danger {
+      background: var(--status-alarm-bg);
+      color: var(--status-alarm);
+    }
+
+    .sidebar-badge.muted {
+      background: var(--border-subtle);
+      color: var(--text-tertiary);
     }
 
     /* Selection box overlay for Ctrl+drag selection */
@@ -547,6 +595,17 @@
     .top-btn.theme-toggle .icon-moon { display: block; }
     [data-theme="dark"] .top-btn.theme-toggle .icon-sun { display: block; }
     [data-theme="dark"] .top-btn.theme-toggle .icon-moon { display: none; }
+
+    /* Language toggle button */
+    .top-btn.lang-toggle {
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    .top-btn.lang-toggle .lang-label {
+      font-family: var(--font-sans);
+    }
 
     /* Help panel (floating, draggable, resizable) */
     .help-panel {
@@ -651,6 +710,20 @@
         document.documentElement.setAttribute('data-theme', 'dark');
       }
     })();
+
+    // Language initialization - runs before DOM
+    (function() {
+      const savedLang = localStorage.getItem('ifc-viewer-language');
+      if (savedLang === 'hr' || savedLang === 'en') {
+        document.documentElement.setAttribute('lang', savedLang);
+      } else {
+        // Check browser language
+        const browserLang = navigator.language.toLowerCase();
+        if (browserLang.startsWith('hr')) {
+          document.documentElement.setAttribute('lang', 'hr');
+        }
+      }
+    })();
   </script>
 </head>
 <body>
@@ -679,12 +752,15 @@
         <line x1="12" y1="17" x2="12.01" y2="17"/>
       </svg>
     </button>
+    <button class="top-btn lang-toggle" id="lang-toggle" aria-label="Toggle language">
+      <span class="lang-label">EN</span>
+    </button>
   </div>
 
   <!-- Help panel (floating, draggable) -->
   <div class="help-panel" id="help-panel">
     <div class="help-panel-header" id="help-panel-header">
-      <h2>User Guide</h2>
+      <h2 id="help-panel-title">User Guide</h2>
       <button class="help-panel-close" id="help-panel-close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
