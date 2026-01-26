@@ -202,28 +202,22 @@
 
         let fragData;
 
-        // Try export() on the loadedModel directly (FragmentsGroup.export())
-        if (typeof loadedModel.export === 'function') {
-          log("Using loadedModel.export()...", "info");
-          fragData = loadedModel.export();
+        // Use getBuffer() to get the fragment binary data
+        if (typeof loadedModel.getBuffer === 'function') {
+          log("Using loadedModel.getBuffer()...", "info");
+          fragData = await loadedModel.getBuffer();
         }
-        // Try getting from fragments list
+        // Fallback: try from fragments list
         else {
           const model = fragments.list.get(loadedModel.modelId);
-          if (model) {
-            log(`FragmentsList model type: ${model.constructor.name}`, "info");
-            const listMethods = Object.getOwnPropertyNames(Object.getPrototypeOf(model))
-              .filter(m => typeof model[m] === 'function');
-            log(`FragmentsList model methods: ${listMethods.join(', ')}`, "info");
-
-            if (typeof model.export === 'function') {
-              fragData = model.export();
-            }
+          if (model && typeof model.getBuffer === 'function') {
+            log("Using fragments.list model.getBuffer()...", "info");
+            fragData = await model.getBuffer();
           }
         }
 
         if (!fragData) {
-          throw new Error("Could not export fragment data");
+          throw new Error("Could not export fragment data - getBuffer() not available");
         }
 
         log(`Fragment size: ${(fragData.byteLength / 1024 / 1024).toFixed(2)} MB`, "info");

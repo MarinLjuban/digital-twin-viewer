@@ -119,19 +119,6 @@ This document provides a quick reference for all scripts in the ifc-viewer proje
 
 ---
 
-## Assets
-
-### mi_maris_doo_logo.jpg
-
-| Property | Value |
-|----------|-------|
-| **Name** | mi_maris_doo_logo.jpg |
-| **Type** | Image (JPEG) |
-| **Description** | Company logo image asset. |
-| **File Location** | `C:\Users\marin\git\github\engine_components\ifc-viewer\src\mi_maris_doo_logo.jpg` |
-
----
-
 ## Configuration Files
 
 ### package.json

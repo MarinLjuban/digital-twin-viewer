@@ -472,43 +472,6 @@
       color: var(--text-secondary);
     }
 
-    /* Theme toggle button styling */
-    .theme-toggle {
-      position: fixed;
-      top: var(--space-3);
-      left: var(--space-3);
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-md);
-      background: var(--surface-raised);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      color: var(--text-secondary);
-    }
-
-    .theme-toggle:hover {
-      background: var(--surface-overlay);
-      border-color: var(--border-strong);
-      color: var(--text-primary);
-    }
-
-    .theme-toggle svg {
-      width: 18px;
-      height: 18px;
-    }
-
-    /* Show sun icon in dark mode, moon in light mode */
-    .theme-toggle .icon-sun { display: none; }
-    .theme-toggle .icon-moon { display: block; }
-
-    [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
-    [data-theme="dark"] .theme-toggle .icon-moon { display: none; }
-
     /* Selection box overlay for Ctrl+drag selection */
     .selection-box {
       position: fixed;
@@ -543,6 +506,141 @@
     .ctrl-held bim-viewport {
       cursor: crosshair !important;
     }
+
+    /* Top buttons container */
+    .top-buttons {
+      position: fixed;
+      top: var(--space-3);
+      left: var(--space-3);
+      z-index: 1000;
+      display: flex;
+      gap: var(--space-2);
+    }
+
+    .top-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      background: var(--surface-raised);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      color: var(--text-secondary);
+    }
+
+    .top-btn:hover {
+      background: var(--surface-overlay);
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    .top-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Show sun icon in dark mode, moon in light mode */
+    .top-btn.theme-toggle .icon-sun { display: none; }
+    .top-btn.theme-toggle .icon-moon { display: block; }
+    [data-theme="dark"] .top-btn.theme-toggle .icon-sun { display: block; }
+    [data-theme="dark"] .top-btn.theme-toggle .icon-moon { display: none; }
+
+    /* Help panel (floating, draggable, resizable) */
+    .help-panel {
+      position: fixed;
+      top: 60px;
+      right: 24px;
+      width: 700px;
+      height: 80vh;
+      min-width: 400px;
+      min-height: 300px;
+      background: var(--surface-base);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg);
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+      z-index: 1500;
+      resize: both;
+      overflow: hidden;
+    }
+
+    .help-panel.visible {
+      display: flex;
+    }
+
+    .help-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: grab;
+      user-select: none;
+      background: var(--surface-raised);
+    }
+
+    .help-panel-header:active {
+      cursor: grabbing;
+    }
+
+    .help-panel-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .help-panel-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      cursor: pointer;
+      color: var(--text-tertiary);
+      transition: all var(--transition-fast);
+    }
+
+    .help-panel-close:hover {
+      background: var(--surface-overlay);
+      color: var(--text-primary);
+    }
+
+    .help-panel-close svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .help-panel-content {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .help-panel-content iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Resize handle indicator */
+    .help-panel::after {
+      content: '';
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 12px;
+      height: 12px;
+      background: linear-gradient(135deg, transparent 50%, var(--border-default) 50%);
+      pointer-events: none;
+      opacity: 0.5;
+    }
   </style>
   <script>
     // Theme initialization - runs before DOM to prevent FOUC
@@ -556,23 +654,48 @@
   </script>
 </head>
 <body>
-  <!-- Theme toggle button -->
-  <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
-    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-    </svg>
-    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="12" cy="12" r="5"/>
-      <line x1="12" y1="1" x2="12" y2="3"/>
-      <line x1="12" y1="21" x2="12" y2="23"/>
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-      <line x1="1" y1="12" x2="3" y2="12"/>
-      <line x1="21" y1="12" x2="23" y2="12"/>
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-    </svg>
-  </button>
+  <!-- Top buttons (theme toggle + help) -->
+  <div class="top-buttons">
+    <button class="top-btn theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+    <button class="top-btn" id="help-toggle" aria-label="Help">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Help panel (floating, draggable) -->
+  <div class="help-panel" id="help-panel">
+    <div class="help-panel-header" id="help-panel-header">
+      <h2>User Guide</h2>
+      <button class="help-panel-close" id="help-panel-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="help-panel-content">
+      <iframe src="/USER_GUIDE.pdf" title="User Guide"></iframe>
+    </div>
+  </div>
 
   <bim-grid id="app"></bim-grid>
 
@@ -590,6 +713,45 @@
       }
 
       localStorage.setItem('ifc-viewer-theme', newTheme);
+    });
+
+    // Help panel functionality (floating, draggable)
+    const helpPanel = document.getElementById('help-panel');
+    const helpHeader = document.getElementById('help-panel-header');
+
+    document.getElementById('help-toggle').addEventListener('click', function() {
+      helpPanel.classList.toggle('visible');
+    });
+
+    document.getElementById('help-panel-close').addEventListener('click', function() {
+      helpPanel.classList.remove('visible');
+    });
+
+    // Dragging functionality
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    helpHeader.addEventListener('mousedown', function(e) {
+      if (e.target.closest('.help-panel-close')) return;
+      isDragging = true;
+      dragOffsetX = e.clientX - helpPanel.offsetLeft;
+      dragOffsetY = e.clientY - helpPanel.offsetTop;
+      helpPanel.style.transition = 'none';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      const x = Math.max(0, Math.min(e.clientX - dragOffsetX, window.innerWidth - helpPanel.offsetWidth));
+      const y = Math.max(0, Math.min(e.clientY - dragOffsetY, window.innerHeight - helpPanel.offsetHeight));
+      helpPanel.style.left = x + 'px';
+      helpPanel.style.top = y + 'px';
+      helpPanel.style.right = 'auto';
+    });
+
+    document.addEventListener('mouseup', function() {
+      isDragging = false;
+      helpPanel.style.transition = '';
     });
   </script>
 

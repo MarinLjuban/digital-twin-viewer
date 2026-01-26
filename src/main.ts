@@ -2825,22 +2825,6 @@ const leftPanel = BUI.Component.create(() => {
     <bim-panel-section label="Documents" icon="mdi:file-document-multiple">
       <div id="documents-container" style="min-height: 80px;"></div>
     </bim-panel-section>
-    <div style="
-      padding: 20px 16px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-      margin-top: auto;
-      background: linear-gradient(to top, rgba(0, 0, 0, 0.15), transparent);
-    ">
-      <img src="/src/mi_maris_doo_logo.jpg" alt="MI Maris Logo" style="
-        height: 64px;
-        width: auto;
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      " />
-    </div>
    </bim-panel>
   `;
 });

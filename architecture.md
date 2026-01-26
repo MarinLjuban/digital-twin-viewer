@@ -26,8 +26,7 @@ ifc-viewer/
 ├── src/
 │   ├── main.ts              # Application entry point and UI (3686 lines)
 │   ├── bms-mock.ts          # Building Management System mock API
-│   ├── document-store.ts    # IndexedDB document storage service
-│   └── mi_maris_doo_logo.jpg # Company logo asset
+│   └── document-store.ts    # IndexedDB document storage service
 ├── public/
 │   ├── models/
 │   │   ├── OfficeBuilding_complete_2024.frag # Pre-converted fragment (fast loading)
