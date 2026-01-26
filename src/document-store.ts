@@ -645,7 +645,7 @@ export const getFileIcon = (fileType: string): string => {
 /**
  * Check if mock documents have been seeded
  */
-const SEEDED_KEY = "mock-documents-seeded-v2";
+const SEEDED_KEY = "mock-documents-seeded-v3";
 
 const hasBeenSeeded = (): boolean => {
   return localStorage.getItem(SEEDED_KEY) === "true";
