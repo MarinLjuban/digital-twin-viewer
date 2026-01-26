@@ -276,7 +276,7 @@ const toggleGhosting = async (enabled: boolean) => {
   */
 
 const fragments = components.get(OBC.FragmentsManager);
-fragments.init("/resources/worker.mjs");
+fragments.init(`${import.meta.env.BASE_URL}resources/worker.mjs`);
 
 // Adjust LOD settings to keep elements visible from further away
 // graphicsQuality: 0 = low quality (more aggressive culling), 1 = high quality (less culling)
