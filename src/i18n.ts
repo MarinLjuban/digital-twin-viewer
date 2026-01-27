@@ -19,6 +19,10 @@ export interface Translations {
   spatialTree: string;
   propertyFilter: string;
 
+  // Selection indicator
+  selectedElement: string;
+  nothingSelected: string;
+
   // Empty states
   noElementSelected: string;
   clickToViewProperties: string;
@@ -159,6 +163,10 @@ const translations: Record<Language, Translations> = {
     spatialTree: 'Spatial Tree',
     propertyFilter: 'Property Filter',
 
+    // Selection indicator
+    selectedElement: 'Selected',
+    nothingSelected: 'Nothing selected',
+
     // Empty states
     noElementSelected: 'No element selected',
     clickToViewProperties: 'Click on a model element to view its properties',
@@ -297,6 +305,10 @@ const translations: Record<Language, Translations> = {
     documents: 'Dokumenti',
     spatialTree: 'Prostorna struktura',
     propertyFilter: 'Filter svojstava',
+
+    // Selection indicator
+    selectedElement: 'Odabrano',
+    nothingSelected: 'Ništa nije odabrano',
 
     // Empty states
     noElementSelected: 'Nijedan element nije odabran',

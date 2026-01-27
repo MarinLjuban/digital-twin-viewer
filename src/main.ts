@@ -777,6 +777,92 @@ const updatePropertiesEmptyState = (hasSelection: boolean) => {
   }
 };
 
+// Helper to update selection indicator (shows selected element name)
+const updateSelectionIndicator = async (selection: OBC.ModelIdMap) => {
+  const indicatorValue = document.getElementById("selection-indicator-value");
+  if (!indicatorValue) {
+    // Element not in DOM yet, retry after a short delay
+    setTimeout(() => updateSelectionIndicator(selection), 100);
+    return;
+  }
+
+  // Count total selected elements
+  let totalCount = 0;
+  for (const [, ids] of Object.entries(selection)) {
+    const idsArray = ids instanceof Set ? Array.from(ids) : (Array.isArray(ids) ? ids : []);
+    totalCount += idsArray.length;
+  }
+
+  // Check if there's a selection
+  if (totalCount === 0) {
+    indicatorValue.textContent = t('nothingSelected');
+    indicatorValue.style.color = "var(--text-tertiary, rgba(255, 255, 255, 0.40))";
+    indicatorValue.style.fontStyle = "italic";
+    return;
+  }
+
+  // Get element info from the first selected element
+  for (const [modelId, ids] of Object.entries(selection)) {
+    const idsArray = ids instanceof Set ? Array.from(ids) : (Array.isArray(ids) ? ids : []);
+    if (idsArray.length === 0) continue;
+
+    const model = fragments.list.get(modelId);
+    if (!model) continue;
+
+    try {
+      // Get element data - use same approach as BMS code
+      const firstId = idsArray[0];
+      const elementsData = await model.getItemsData([firstId]);
+
+      if (elementsData && elementsData.length > 0) {
+        const element = elementsData[0];
+        let displayText = "";
+
+        // Get the name if available (same pattern as BMS code)
+        const nameAttr = element.Name;
+        if (nameAttr && "value" in nameAttr && nameAttr.value) {
+          displayText = String(nameAttr.value);
+        }
+
+        // Get element type (IFC class)
+        const ifcType = element.type;
+        if (ifcType) {
+          // Format: "IFCWALL" -> "Wall", "IFCWALLSTANDARDCASE" -> "Wall Standard Case"
+          const typeName = String(ifcType)
+            .replace(/^IFC/i, "")
+            .replace(/([a-z])([A-Z])/g, "$1 $2")
+            .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+
+          if (displayText) {
+            displayText = `${displayText} (${typeName})`;
+          } else {
+            displayText = typeName;
+          }
+        }
+
+        // Show count if multiple elements selected
+        if (totalCount > 1) {
+          displayText = displayText ? `${displayText} +${totalCount - 1}` : `${totalCount} elements`;
+        }
+
+        if (displayText) {
+          indicatorValue.textContent = displayText;
+          indicatorValue.style.color = "var(--text-primary, rgba(255, 255, 255, 0.92))";
+          indicatorValue.style.fontStyle = "normal";
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("Error getting element data for selection indicator:", error);
+    }
+  }
+
+  // Fallback if we couldn't get element info
+  indicatorValue.textContent = `${totalCount} element${totalCount > 1 ? 's' : ''}`;
+  indicatorValue.style.color = "var(--text-primary, rgba(255, 255, 255, 0.92))";
+  indicatorValue.style.fontStyle = "normal";
+};
+
 // BMS Sensor Display
 let currentBMSSubscriptions: (() => void)[] = [];
 let currentBMSData: Map<string, BMSDataPoint> = new Map();
@@ -953,6 +1039,12 @@ const renderBMSNoSensorState = (container: HTMLElement) => {
   `;
 };
 
+// Extract BMS name from element name (e.g., "Generic_PoppetValve_Round_Exhaust: NW 100 (EXH-04)" -> "EXH-04")
+const extractBmsName = (elementName: string): string | null => {
+  const match = elementName.match(/\(([^)]+)\)\s*$/);
+  return match ? match[1] : null;
+};
+
 const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDataPoint>) => {
   container.innerHTML = "";
 
@@ -965,6 +1057,9 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
       padding: 8px 0;
       margin-bottom: 4px;
     `;
+
+    // Extract BMS name from element name
+    const bmsName = extractBmsName(data.elementName);
 
     // Element header (clickable to highlight object)
     const header = document.createElement("div");
@@ -983,13 +1078,16 @@ const renderBMSSensorData = (container: HTMLElement, bmsData: Map<string, BMSDat
 
     // Count sensors for badge
     const sensorCount = data.sensors.size;
+
+    // Show BMS name prominently if available, otherwise fall back to element name
+    const displayName = bmsName || data.elementName;
     header.innerHTML = `
       <div style="display: flex; align-items: center; gap: 6px;">
-        <span>${data.elementName}</span>
+        <span>${displayName}</span>
         <span class="sidebar-badge muted">${sensorCount}</span>
       </div>
     `;
-    header.title = t('clickToHighlight');
+    header.title = bmsName ? `${data.elementName}\n${t('clickToHighlight')}` : t('clickToHighlight');
     header.onmouseenter = () => {
       header.style.color = "var(--accent, #3b82f6)";
     };
@@ -2296,6 +2394,8 @@ highlighter.events.select.onHighlight.add(async (selection) => {
   updatePropertiesTable({ modelIdMap: selection });
   currentSelection = selection;
   updatePropertiesEmptyState(Object.keys(selection).length > 0);
+  // Update selection indicator
+  await updateSelectionIndicator(selection);
   // Update ghosting when selection changes
   await applyGhosting();
   // Update BMS sensor data display
@@ -2308,6 +2408,8 @@ highlighter.events.select.onClear.add(async () => {
   updatePropertiesTable({ modelIdMap: {} });
   currentSelection = {};
   updatePropertiesEmptyState(false);
+  // Update selection indicator
+  await updateSelectionIndicator({});
   // Update ghosting when selection is cleared
   await applyGhosting();
   // Clear BMS display
@@ -2835,12 +2937,48 @@ const createLeftPanel = () => BUI.Component.create(() => {
 });
 let leftPanel = createLeftPanel();
 
-// Right panel - Selection (Tabs [Properties | Sensors] + Documents)
+// Right panel - Selection (Selection indicator + Tabs [Sensors | Properties] + Documents)
 const createRightPanel = () => BUI.Component.create(() => {
   return BUI.html`
    <bim-panel label="${t('selection')}" style="display: flex; flex-direction: column; height: 100%;">
-    <!-- Tabbed section for Properties and Sensors -->
+    <!-- Selection indicator - always visible -->
+    <div id="selection-indicator" style="
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+      background: var(--surface-raised, #1c1f2a);
+      min-height: 44px;
+    ">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-tertiary, rgba(255, 255, 255, 0.40)); flex-shrink: 0;">
+        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+        <path d="M13 13l6 6"/>
+      </svg>
+      <div style="flex: 1; min-width: 0;">
+        <div id="selection-indicator-label" style="
+          font-size: 10px;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: var(--text-tertiary, rgba(255, 255, 255, 0.40));
+          margin-bottom: 2px;
+        ">${t('selectedElement')}</div>
+        <div id="selection-indicator-value" style="
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        ">${t('nothingSelected')}</div>
+      </div>
+    </div>
+    <!-- Tabbed section for Sensors (default) and Properties -->
     <bim-tabs style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <bim-tab label="${t('sensors')}" icon="mdi:gauge">
+        <div id="bms-sensor-container" style="min-height: 100px; padding: 8px;"></div>
+      </bim-tab>
       <bim-tab label="${t('properties')}" icon="mdi:information-outline">
         <div id="properties-container" style="min-height: 100px; padding: 8px;">
           <div id="properties-empty-state" style="
@@ -2862,13 +3000,10 @@ const createRightPanel = () => BUI.Component.create(() => {
           ${propertiesTable}
         </div>
       </bim-tab>
-      <bim-tab label="${t('sensors')}" icon="mdi:gauge">
-        <div id="bms-sensor-container" style="min-height: 100px; padding: 8px;"></div>
-      </bim-tab>
     </bim-tabs>
-    <!-- Documents section -->
-    <bim-panel-section label="${t('documents')}" icon="mdi:file-document-multiple">
-      <div id="documents-container" style="min-height: 100px;"></div>
+    <!-- Documents section - limited to 1/3 of panel height -->
+    <bim-panel-section label="${t('documents')}" icon="mdi:file-document-multiple" style="flex-shrink: 0; max-height: 66vh; overflow-y: auto;">
+      <div id="documents-container" style="min-height: 50px;"></div>
     </bim-panel-section>
    </bim-panel>
   `;

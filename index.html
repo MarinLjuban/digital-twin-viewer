@@ -794,10 +794,11 @@
       const helpIframe = document.getElementById('help-iframe');
 
       helpToggle.addEventListener('click', function() {
-        // Set iframe src on first open (handles base URL for GitHub Pages)
-        if (!helpIframe.src || helpIframe.src === window.location.href) {
-          helpIframe.src = new URL('USER_GUIDE.pdf', window.location.href).href;
-        }
+        // Determine PDF based on current language
+        const currentLang = localStorage.getItem('ifc-viewer-language') || 'en';
+        const pdfFile = currentLang === 'hr' ? 'USER_GUIDE_HR.pdf' : 'USER_GUIDE.pdf';
+        // Always update src to handle language changes
+        helpIframe.src = new URL(pdfFile, window.location.href).href;
         helpPanel.classList.toggle('visible');
       });
 
