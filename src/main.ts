@@ -84,24 +84,6 @@ const updateSceneBackground = () => {
 // Set initial background
 updateSceneBackground();
 
-// Listen for theme changes
-const themeToggle = document.getElementById('theme-toggle');
-if (themeToggle) {
-  themeToggle.addEventListener('click', () => {
-    // Small delay to let the DOM update first
-    requestAnimationFrame(updateSceneBackground);
-  });
-}
-
-// Language toggle handler
-const langToggle = document.getElementById('lang-toggle');
-const langLabel = langToggle?.querySelector('.lang-label');
-
-// Set initial language label
-if (langLabel) {
-  langLabel.textContent = getLanguage().toUpperCase();
-}
-
 // Update help panel title based on language
 const updateHelpPanelTitle = () => {
   const helpPanelTitle = document.getElementById('help-panel-title');
@@ -111,7 +93,30 @@ const updateHelpPanelTitle = () => {
 };
 updateHelpPanelTitle();
 
-if (langToggle) {
+// Setup panel button handlers (called after panel is created)
+const setupPanelButtonHandlers = () => {
+  const themeToggle = document.getElementById('theme-toggle');
+  const langToggle = document.getElementById('lang-toggle');
+  const langLabel = langToggle?.querySelector('.lang-label');
+
+  if (!themeToggle || !langToggle) {
+    // Elements not yet created, retry after a short delay
+    setTimeout(setupPanelButtonHandlers, 100);
+    return;
+  }
+
+  // Listen for theme changes to update scene background
+  themeToggle.addEventListener('click', () => {
+    // Small delay to let the DOM update first
+    requestAnimationFrame(updateSceneBackground);
+  });
+
+  // Set initial language label
+  if (langLabel) {
+    langLabel.textContent = getLanguage().toUpperCase();
+  }
+
+  // Language toggle handler
   langToggle.addEventListener('click', () => {
     const newLang = toggleLanguage();
     if (langLabel) {
@@ -121,7 +126,10 @@ if (langToggle) {
     // This is the most reliable way to update all BUI components
     window.location.reload();
   });
-}
+};
+
+// Start checking for panel buttons
+setupPanelButtonHandlers();
 
 const viewport = document.createElement("bim-viewport");
 const rendererComponent = new OBC.SimpleRenderer(components, viewport);
@@ -2630,44 +2638,8 @@ const updateViewButtons = () => {
   }
 };
 
-// Left panel - Properties (swapped from right)
+// Left panel - Model (Tree + Filter)
 const createLeftPanel = () => BUI.Component.create(() => {
-  return BUI.html`
-   <bim-panel label="${t('properties')}" style="display: flex; flex-direction: column; height: 100%;">
-    <bim-panel-section label="${t('elementProperties')}" icon="mdi:information-outline">
-      <div id="properties-container" style="min-height: 100px;">
-        <div id="properties-empty-state" style="
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 32px 16px;
-          text-align: center;
-          color: var(--text-muted, rgba(255, 255, 255, 0.32));
-        ">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 12px;">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4M12 8h.01"/>
-          </svg>
-          <span style="font-size: 12px; font-weight: 500;">${t('noElementSelected')}</span>
-          <span style="font-size: 11px; margin-top: 4px; opacity: 0.7;">${t('clickToViewProperties')}</span>
-        </div>
-        ${propertiesTable}
-      </div>
-    </bim-panel-section>
-    <bim-panel-section label="${t('bmsSensors')}" icon="mdi:gauge">
-      <div id="bms-sensor-container" style="min-height: 100px;"></div>
-    </bim-panel-section>
-    <bim-panel-section label="${t('documents')}" icon="mdi:file-document-multiple">
-      <div id="documents-container" style="min-height: 100px;"></div>
-    </bim-panel-section>
-   </bim-panel>
-  `;
-});
-let leftPanel = createLeftPanel();
-
-// Right panel - Trees (swapped from left)
-const createRightPanel = () => BUI.Component.create(() => {
   const onSearch = (e: Event) => {
     const input = e.target as BUI.TextInput;
     spatialTree.queryString = input.value;
@@ -2730,6 +2702,92 @@ const createRightPanel = () => BUI.Component.create(() => {
 
   return BUI.html`
    <bim-panel label="${t('model')}">
+    <!-- Settings section with logo and theme, help, language buttons -->
+    <div id="panel-settings-bar" style="
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+      background: var(--surface-raised, #1c1f2a);
+    ">
+      <!-- Logo -->
+      <img src="${import.meta.env.BASE_URL}logo.png" alt="Logo" style="
+        height: 50px;
+        width: auto;
+        object-fit: contain;
+      "/>
+      <!-- Settings buttons -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="panel-settings-btn theme-toggle" id="theme-toggle" aria-label="Toggle theme" style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+        border-radius: 6px;
+        background: var(--surface-base, #161922);
+        cursor: pointer;
+        color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+        transition: all 150ms ease;
+      ">
+        <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </button>
+      <button class="panel-settings-btn" id="help-toggle" aria-label="Help" style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+        border-radius: 6px;
+        background: var(--surface-base, #161922);
+        cursor: pointer;
+        color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+        transition: all 150ms ease;
+      ">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </button>
+      <button class="panel-settings-btn lang-toggle" id="lang-toggle" aria-label="Toggle language" style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+        border-radius: 6px;
+        background: var(--surface-base, #161922);
+        cursor: pointer;
+        color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+        font-weight: 600;
+        font-size: 10px;
+        letter-spacing: 0.5px;
+        font-family: var(--font-sans, 'Inter', sans-serif);
+        transition: all 150ms ease;
+      ">
+        <span class="lang-label">EN</span>
+      </button>
+      </div>
+    </div>
     <bim-panel-section label="${t('spatialTree')}">
       <bim-text-input @input=${onSearch} placeholder="${t('search')}" debounce="200"></bim-text-input>
       ${spatialTree}
@@ -2771,6 +2829,46 @@ const createRightPanel = () => BUI.Component.create(() => {
           <bim-button @click=${onHideFiltered} label="${t('hide')}" icon="mdi:eye-off-outline" style="flex: 1;"></bim-button>
         </div>
       </div>
+    </bim-panel-section>
+   </bim-panel>
+  `;
+});
+let leftPanel = createLeftPanel();
+
+// Right panel - Selection (Tabs [Properties | Sensors] + Documents)
+const createRightPanel = () => BUI.Component.create(() => {
+  return BUI.html`
+   <bim-panel label="${t('selection')}" style="display: flex; flex-direction: column; height: 100%;">
+    <!-- Tabbed section for Properties and Sensors -->
+    <bim-tabs style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <bim-tab label="${t('properties')}" icon="mdi:information-outline">
+        <div id="properties-container" style="min-height: 100px; padding: 8px;">
+          <div id="properties-empty-state" style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+            text-align: center;
+            color: var(--text-muted, rgba(255, 255, 255, 0.32));
+          ">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 12px;">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            <span style="font-size: 12px; font-weight: 500;">${t('noElementSelected')}</span>
+            <span style="font-size: 11px; margin-top: 4px; opacity: 0.7;">${t('clickToViewProperties')}</span>
+          </div>
+          ${propertiesTable}
+        </div>
+      </bim-tab>
+      <bim-tab label="${t('sensors')}" icon="mdi:gauge">
+        <div id="bms-sensor-container" style="min-height: 100px; padding: 8px;"></div>
+      </bim-tab>
+    </bim-tabs>
+    <!-- Documents section -->
+    <bim-panel-section label="${t('documents')}" icon="mdi:file-document-multiple">
+      <div id="documents-container" style="min-height: 100px;"></div>
     </bim-panel-section>
    </bim-panel>
   `;
@@ -3400,7 +3498,7 @@ const createSidebarToggles = () => {
 
     /* Smooth panel transitions */
     bim-panel[label="Model"],
-    bim-panel[label="Properties"] {
+    bim-panel[label="Selection"] {
       transition: opacity 250ms ease-out, visibility 250ms ease-out;
     }
 
@@ -3429,7 +3527,7 @@ const createSidebarToggles = () => {
   };
   document.body.appendChild(leftToggle);
 
-  // Right toggle (for Properties panel - on the right side)
+  // Right toggle (for Selection panel - on the right side)
   const rightToggle = document.createElement("button");
   rightToggle.className = "sidebar-toggle right";
   rightToggle.id = "right-sidebar-toggle";
@@ -3618,7 +3716,7 @@ const updateGridLayout = () => {
 
   // Get panels
   const modelPanel = document.querySelector('bim-panel[label="Model"]') as HTMLElement;
-  const propertiesPanel = document.querySelector('bim-panel[label="Properties"]') as HTMLElement;
+  const selectionPanel = document.querySelector('bim-panel[label="Selection"]') as HTMLElement;
   const appElement = document.getElementById("app");
 
   // For expanding panels, show them first before animating
@@ -3628,25 +3726,25 @@ const updateGridLayout = () => {
     modelPanel.offsetHeight;
     modelPanel.classList.remove("panel-hidden");
   }
-  if (propertiesPanel && !propertiesPanelCollapsed) {
-    propertiesPanel.style.display = "";
-    propertiesPanel.offsetHeight;
-    propertiesPanel.classList.remove("panel-hidden");
+  if (selectionPanel && !propertiesPanelCollapsed) {
+    selectionPanel.style.display = "";
+    selectionPanel.offsetHeight;
+    selectionPanel.classList.remove("panel-hidden");
   }
 
   // For collapsing panels, fade out first
   if (modelPanel && modelPanelCollapsed) {
     modelPanel.classList.add("panel-hidden");
   }
-  if (propertiesPanel && propertiesPanelCollapsed) {
-    propertiesPanel.classList.add("panel-hidden");
+  if (selectionPanel && propertiesPanelCollapsed) {
+    selectionPanel.classList.add("panel-hidden");
   }
 
   // Update the grid template directly on the app element for smooth transition
   if (appElement) {
     appElement.style.display = "grid";
     appElement.style.gridTemplateColumns = `${leftWidth} 1fr ${rightWidth}`;
-    appElement.style.gridTemplateAreas = '"rightPanel viewport leftPanel"';
+    appElement.style.gridTemplateAreas = '"leftPanel viewport rightPanel"';
     appElement.style.transition = "grid-template-columns 250ms ease-out";
   }
 
@@ -3667,8 +3765,8 @@ const updateGridLayout = () => {
     if (modelPanel && modelPanelCollapsed) {
       modelPanel.style.display = "none";
     }
-    if (propertiesPanel && propertiesPanelCollapsed) {
-      propertiesPanel.style.display = "none";
+    if (selectionPanel && propertiesPanelCollapsed) {
+      selectionPanel.style.display = "none";
     }
 
     // Use requestAnimationFrame to ensure layout is settled before resize
@@ -3693,7 +3791,7 @@ setTimeout(() => {
   if (appElement) {
     appElement.style.display = "grid";
     appElement.style.gridTemplateColumns = `${leftPanelWidth}px 1fr ${rightPanelWidth}px`;
-    appElement.style.gridTemplateAreas = '"rightPanel viewport leftPanel"';
+    appElement.style.gridTemplateAreas = '"leftPanel viewport rightPanel"';
   }
   if ((window as any).__updateResizeHandles) {
     (window as any).__updateResizeHandles();

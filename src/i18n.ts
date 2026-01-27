@@ -10,6 +10,9 @@ export interface Translations {
   // Panel labels
   properties: string;
   model: string;
+  selection: string;
+  sensors: string;
+  settings: string;
   elementProperties: string;
   bmsSensors: string;
   documents: string;
@@ -147,6 +150,9 @@ const translations: Record<Language, Translations> = {
     // Panel labels
     properties: 'Properties',
     model: 'Model',
+    selection: 'Selection',
+    sensors: 'Sensors',
+    settings: 'Settings',
     elementProperties: 'Element Properties',
     bmsSensors: 'BMS Sensors',
     documents: 'Documents',
@@ -283,6 +289,9 @@ const translations: Record<Language, Translations> = {
     // Panel labels
     properties: 'Svojstva',
     model: 'Model',
+    selection: 'Odabir',
+    sensors: 'Senzori',
+    settings: 'Postavke',
     elementProperties: 'Svojstva elementa',
     bmsSensors: 'BMS Senzori',
     documents: 'Dokumenti',

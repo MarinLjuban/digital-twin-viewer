@@ -306,18 +306,18 @@
     }
 
     /* Properties panel specific styling */
-    bim-panel[label="Properties"] {
+    bim-panel[label="Selection"] {
       border-left: 1px solid var(--border-subtle) !important;
       border-right: none !important;
     }
 
-    bim-panel[label="Properties"] bim-table {
+    bim-panel[label="Selection"] bim-table {
       border-radius: var(--radius-md);
       overflow: hidden;
     }
 
     /* Property groups - collapsible sections */
-    bim-panel[label="Properties"] bim-table-group {
+    bim-panel[label="Selection"] bim-table-group {
       background: var(--surface-raised) !important;
       border-radius: var(--radius-sm) !important;
       margin-bottom: var(--space-2) !important;
@@ -325,7 +325,7 @@
       border: 1px solid var(--border-subtle) !important;
     }
 
-    bim-panel[label="Properties"] bim-table-group::part(header) {
+    bim-panel[label="Selection"] bim-table-group::part(header) {
       background: linear-gradient(180deg, var(--surface-overlay) 0%, var(--surface-raised) 100%) !important;
       padding: var(--space-2) var(--space-3) !important;
       font-weight: 600 !important;
@@ -336,12 +336,12 @@
       border-bottom: 1px solid var(--border-subtle) !important;
     }
 
-    bim-panel[label="Properties"] bim-table-group[expanded]::part(header) {
+    bim-panel[label="Selection"] bim-table-group[expanded]::part(header) {
       border-bottom: 1px solid var(--border-default) !important;
     }
 
     /* Property name column - left side */
-    bim-panel[label="Properties"] bim-table-cell:first-child {
+    bim-panel[label="Selection"] bim-table-cell:first-child {
       color: var(--text-tertiary) !important;
       font-family: var(--font-sans) !important;
       font-weight: 500 !important;
@@ -351,27 +351,27 @@
     }
 
     /* Property value column - right side */
-    bim-panel[label="Properties"] bim-table-cell:last-child {
+    bim-panel[label="Selection"] bim-table-cell:last-child {
       color: var(--text-primary) !important;
       font-family: var(--font-mono) !important;
       font-size: 11px !important;
     }
 
     /* Alternate row colors for better readability */
-    bim-panel[label="Properties"] bim-table-row:nth-child(even) {
+    bim-panel[label="Selection"] bim-table-row:nth-child(even) {
       background: var(--row-alternate-bg) !important;
     }
 
-    bim-panel[label="Properties"] bim-table-row:hover {
+    bim-panel[label="Selection"] bim-table-row:hover {
       background: var(--accent-muted) !important;
     }
 
-    bim-panel[label="Properties"] bim-table-row:hover bim-table-cell:first-child {
+    bim-panel[label="Selection"] bim-table-row:hover bim-table-cell:first-child {
       color: var(--text-secondary) !important;
     }
 
     /* Empty state styling */
-    bim-panel[label="Properties"] bim-panel-section:empty::after {
+    bim-panel[label="Selection"] bim-panel-section:empty::after {
       content: "Select an element to view properties";
       display: block;
       padding: var(--space-4);
@@ -393,20 +393,20 @@
     }
 
     /* Clickable cells cursor */
-    bim-panel[label="Properties"] bim-table-cell {
+    bim-panel[label="Selection"] bim-table-cell {
       cursor: pointer;
     }
 
-    bim-panel[label="Properties"] bim-table-cell:active {
+    bim-panel[label="Selection"] bim-table-cell:active {
       background: var(--accent-muted) !important;
     }
 
     /* Value type indicators */
-    bim-panel[label="Properties"] bim-table-cell:last-child[data-type="number"] {
+    bim-panel[label="Selection"] bim-table-cell:last-child[data-type="number"] {
       color: var(--type-number) !important;
     }
 
-    bim-panel[label="Properties"] bim-table-cell:last-child[data-type="boolean"] {
+    bim-panel[label="Selection"] bim-table-cell:last-child[data-type="boolean"] {
       color: var(--type-boolean) !important;
     }
 
@@ -421,11 +421,11 @@
     }
 
     /* Better spacing for property sections */
-    bim-panel[label="Properties"] bim-panel-section {
+    bim-panel[label="Selection"] bim-panel-section {
       padding: var(--space-2) !important;
     }
 
-    bim-panel[label="Properties"] bim-panel-section::part(content) {
+    bim-panel[label="Selection"] bim-panel-section::part(content) {
       padding: var(--space-2) 0 !important;
     }
 
@@ -437,6 +437,46 @@
 
     .cell-copied {
       animation: cellCopied 0.3s ease-out forwards;
+    }
+
+    /* Tab styling for Selection panel */
+    bim-tabs {
+      --bim-ui_bg-base: var(--surface-base);
+      --bim-ui_bg-contrast-10: var(--border-subtle);
+    }
+
+    bim-tabs::part(tab-list) {
+      background: var(--surface-raised);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: var(--space-1) var(--space-2);
+      gap: var(--space-1);
+    }
+
+    bim-tab::part(tab-button) {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 500;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      color: var(--text-tertiary);
+      background: transparent;
+      border: none;
+      transition: all var(--transition-fast);
+    }
+
+    bim-tab::part(tab-button):hover {
+      color: var(--text-secondary);
+      background: var(--surface-overlay);
+    }
+
+    bim-tab[active]::part(tab-button) {
+      color: var(--accent);
+      background: var(--accent-muted);
+    }
+
+    bim-tab::part(content) {
+      padding: 0;
+      overflow-y: auto;
     }
 
     bim-viewport {
@@ -555,56 +595,15 @@
       cursor: crosshair !important;
     }
 
-    /* Top buttons container */
-    .top-buttons {
-      position: fixed;
-      top: var(--space-3);
-      left: var(--space-3);
-      z-index: 1000;
-      display: flex;
-      gap: var(--space-2);
+    /* Panel settings buttons (in Model panel header) */
+    .panel-settings-btn:hover {
+      background: var(--surface-overlay) !important;
+      border-color: var(--border-strong) !important;
+      color: var(--text-primary) !important;
     }
 
-    .top-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-md);
-      background: var(--surface-raised);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      color: var(--text-secondary);
-    }
-
-    .top-btn:hover {
-      background: var(--surface-overlay);
-      border-color: var(--border-strong);
-      color: var(--text-primary);
-    }
-
-    .top-btn svg {
-      width: 18px;
-      height: 18px;
-    }
-
-    /* Show sun icon in dark mode, moon in light mode */
-    .top-btn.theme-toggle .icon-sun { display: none; }
-    .top-btn.theme-toggle .icon-moon { display: block; }
-    [data-theme="dark"] .top-btn.theme-toggle .icon-sun { display: block; }
-    [data-theme="dark"] .top-btn.theme-toggle .icon-moon { display: none; }
-
-    /* Language toggle button */
-    .top-btn.lang-toggle {
-      font-weight: 600;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-    }
-
-    .top-btn.lang-toggle .lang-label {
-      font-family: var(--font-sans);
+    .panel-settings-btn:active {
+      background: var(--accent-muted) !important;
     }
 
     /* Help panel (floating, draggable, resizable) */
@@ -727,36 +726,6 @@
   </script>
 </head>
 <body>
-  <!-- Top buttons (theme toggle + help) -->
-  <div class="top-buttons">
-    <button class="top-btn theme-toggle" id="theme-toggle" aria-label="Toggle theme">
-      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-      </svg>
-      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="5"/>
-        <line x1="12" y1="1" x2="12" y2="3"/>
-        <line x1="12" y1="21" x2="12" y2="23"/>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-        <line x1="1" y1="12" x2="3" y2="12"/>
-        <line x1="21" y1="12" x2="23" y2="12"/>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-      </svg>
-    </button>
-    <button class="top-btn" id="help-toggle" aria-label="Help">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-        <line x1="12" y1="17" x2="12.01" y2="17"/>
-      </svg>
-    </button>
-    <button class="top-btn lang-toggle" id="lang-toggle" aria-label="Toggle language">
-      <span class="lang-label">EN</span>
-    </button>
-  </div>
-
   <!-- Help panel (floating, draggable) -->
   <div class="help-panel" id="help-panel">
     <div class="help-panel-header" id="help-panel-header">
@@ -776,64 +745,96 @@
   <bim-grid id="app"></bim-grid>
 
   <script>
-    // Theme toggle functionality
-    document.getElementById('theme-toggle').addEventListener('click', function() {
-      const html = document.documentElement;
-      const currentTheme = html.getAttribute('data-theme');
-      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    // Wait for panel buttons to be created by main.ts, then attach event handlers
+    function initPanelButtons() {
+      const themeToggle = document.getElementById('theme-toggle');
+      const helpToggle = document.getElementById('help-toggle');
 
-      if (newTheme === 'light') {
-        html.removeAttribute('data-theme');
-      } else {
-        html.setAttribute('data-theme', newTheme);
+      if (!themeToggle || !helpToggle) {
+        // Elements not yet created, retry after a short delay
+        setTimeout(initPanelButtons, 100);
+        return;
       }
 
-      localStorage.setItem('ifc-viewer-theme', newTheme);
-    });
+      // Theme toggle functionality
+      themeToggle.addEventListener('click', function() {
+        const html = document.documentElement;
+        const currentTheme = html.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
-    // Help panel functionality (floating, draggable)
-    const helpPanel = document.getElementById('help-panel');
-    const helpHeader = document.getElementById('help-panel-header');
-    const helpIframe = document.getElementById('help-iframe');
+        if (newTheme === 'light') {
+          html.removeAttribute('data-theme');
+        } else {
+          html.setAttribute('data-theme', newTheme);
+        }
 
-    document.getElementById('help-toggle').addEventListener('click', function() {
-      // Set iframe src on first open (handles base URL for GitHub Pages)
-      if (!helpIframe.src || helpIframe.src === window.location.href) {
-        helpIframe.src = new URL('USER_GUIDE.pdf', window.location.href).href;
+        // Update icon visibility
+        const moonIcon = themeToggle.querySelector('.icon-moon');
+        const sunIcon = themeToggle.querySelector('.icon-sun');
+        if (moonIcon && sunIcon) {
+          moonIcon.style.display = newTheme === 'dark' ? 'none' : 'block';
+          sunIcon.style.display = newTheme === 'dark' ? 'block' : 'none';
+        }
+
+        localStorage.setItem('ifc-viewer-theme', newTheme);
+      });
+
+      // Set initial icon state based on current theme
+      const currentTheme = document.documentElement.getAttribute('data-theme');
+      const moonIcon = themeToggle.querySelector('.icon-moon');
+      const sunIcon = themeToggle.querySelector('.icon-sun');
+      if (moonIcon && sunIcon) {
+        moonIcon.style.display = currentTheme === 'dark' ? 'none' : 'block';
+        sunIcon.style.display = currentTheme === 'dark' ? 'block' : 'none';
       }
-      helpPanel.classList.toggle('visible');
-    });
 
-    document.getElementById('help-panel-close').addEventListener('click', function() {
-      helpPanel.classList.remove('visible');
-    });
+      // Help panel functionality (floating, draggable)
+      const helpPanel = document.getElementById('help-panel');
+      const helpHeader = document.getElementById('help-panel-header');
+      const helpIframe = document.getElementById('help-iframe');
 
-    // Dragging functionality
-    let isDragging = false;
-    let dragOffsetX = 0;
-    let dragOffsetY = 0;
+      helpToggle.addEventListener('click', function() {
+        // Set iframe src on first open (handles base URL for GitHub Pages)
+        if (!helpIframe.src || helpIframe.src === window.location.href) {
+          helpIframe.src = new URL('USER_GUIDE.pdf', window.location.href).href;
+        }
+        helpPanel.classList.toggle('visible');
+      });
 
-    helpHeader.addEventListener('mousedown', function(e) {
-      if (e.target.closest('.help-panel-close')) return;
-      isDragging = true;
-      dragOffsetX = e.clientX - helpPanel.offsetLeft;
-      dragOffsetY = e.clientY - helpPanel.offsetTop;
-      helpPanel.style.transition = 'none';
-    });
+      document.getElementById('help-panel-close').addEventListener('click', function() {
+        helpPanel.classList.remove('visible');
+      });
 
-    document.addEventListener('mousemove', function(e) {
-      if (!isDragging) return;
-      const x = Math.max(0, Math.min(e.clientX - dragOffsetX, window.innerWidth - helpPanel.offsetWidth));
-      const y = Math.max(0, Math.min(e.clientY - dragOffsetY, window.innerHeight - helpPanel.offsetHeight));
-      helpPanel.style.left = x + 'px';
-      helpPanel.style.top = y + 'px';
-      helpPanel.style.right = 'auto';
-    });
+      // Dragging functionality
+      let isDragging = false;
+      let dragOffsetX = 0;
+      let dragOffsetY = 0;
 
-    document.addEventListener('mouseup', function() {
-      isDragging = false;
-      helpPanel.style.transition = '';
-    });
+      helpHeader.addEventListener('mousedown', function(e) {
+        if (e.target.closest('.help-panel-close')) return;
+        isDragging = true;
+        dragOffsetX = e.clientX - helpPanel.offsetLeft;
+        dragOffsetY = e.clientY - helpPanel.offsetTop;
+        helpPanel.style.transition = 'none';
+      });
+
+      document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const x = Math.max(0, Math.min(e.clientX - dragOffsetX, window.innerWidth - helpPanel.offsetWidth));
+        const y = Math.max(0, Math.min(e.clientY - dragOffsetY, window.innerHeight - helpPanel.offsetHeight));
+        helpPanel.style.left = x + 'px';
+        helpPanel.style.top = y + 'px';
+        helpPanel.style.right = 'auto';
+      });
+
+      document.addEventListener('mouseup', function() {
+        isDragging = false;
+        helpPanel.style.transition = '';
+      });
+    }
+
+    // Start checking for panel buttons
+    initPanelButtons();
   </script>
 
   <script type="module" src="/src/main.ts"></script>
