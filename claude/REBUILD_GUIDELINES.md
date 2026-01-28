@@ -9,8 +9,9 @@ This document provides complete context and architectural guidelines for rebuild
 - Real-time BMS (Building Management System) sensor integration
 - Document management linked to building elements
 - Interactive filtering, measuring, and sectioning tools
+- Multi-language support (English & Croatian)
 
-**Current State:** The application works but has a monolithic architecture (3,800+ line main.ts) that's difficult to maintain and extend.
+**Current State (January 2026):** The application works but has a monolithic architecture (5,062 line main.ts) that's difficult to maintain and extend. Total codebase is ~7,000 lines of TypeScript.
 
 ---
 
@@ -134,19 +135,19 @@ src/
 │   │
 │   ├── panels/
 │   │   ├── index.ts
-│   │   ├── model-panel/       # Right panel - model controls
+│   │   ├── model-panel/       # Left panel - model controls
 │   │   │   ├── index.ts
 │   │   │   ├── model-panel.ts
 │   │   │   ├── file-loader.ts
 │   │   │   ├── spatial-tree.ts
 │   │   │   └── filter-panel.ts
 │   │   │
-│   │   └── properties-panel/  # Left panel - element info
+│   │   └── selection-panel/   # Right panel - tabbed (Properties, Sensors, Documents)
 │   │       ├── index.ts
-│   │       ├── properties-panel.ts
-│   │       ├── properties-table.ts
-│   │       ├── sensor-display.ts
-│   │       └── document-list.ts
+│   │       ├── selection-panel.ts
+│   │       ├── properties-tab.ts
+│   │       ├── sensors-tab.ts
+│   │       └── documents-tab.ts
 │   │
 │   ├── toolbar/
 │   │   ├── index.ts
@@ -162,7 +163,8 @@ src/
 │       ├── sensor-card.ts
 │       ├── document-card.ts
 │       ├── filter-condition.ts
-│       └── history-chart.ts
+│       ├── history-chart.ts
+│       └── help-panel.ts
 │
 ├── utils/                     # Utility functions
 │   ├── index.ts
@@ -214,6 +216,7 @@ interface AppState {
     language: 'en' | 'hr';
     leftPanelVisible: boolean;
     rightPanelVisible: boolean;
+    activeSelectionTab: 'properties' | 'sensors' | 'documents';
   };
 }
 
@@ -222,7 +225,9 @@ type Action =
   | { type: 'SET_SELECTION'; payload: ModelIdMap }
   | { type: 'ADD_FILTER'; payload: FilterCondition }
   | { type: 'TOGGLE_GHOSTING' }
-  | { type: 'SET_THEME'; payload: 'light' | 'dark' };
+  | { type: 'SET_THEME'; payload: 'light' | 'dark' }
+  | { type: 'SET_LANGUAGE'; payload: 'en' | 'hr' }
+  | { type: 'SET_ACTIVE_TAB'; payload: 'properties' | 'sensors' | 'documents' };
 
 // Store with subscriptions
 class Store {
@@ -249,6 +254,7 @@ type EventMap = {
   'filter:applied': { conditions: FilterCondition[]; resultCount: number };
   'sensor:updated': { guid: string; data: SensorReading };
   'theme:changed': { theme: 'light' | 'dark' };
+  'language:changed': { language: 'en' | 'hr' };
 };
 
 class EventBus {
@@ -335,18 +341,18 @@ export function createBMSService(config: BMSConfig): BMSService {
 UI components are created via factories:
 
 ```typescript
-// ui/panels/properties-panel/sensor-display.ts
-export interface SensorDisplayComponent {
+// ui/panels/selection-panel/sensors-tab.ts
+export interface SensorsTabComponent {
   element: HTMLElement;
   update(guids: string[]): Promise<void>;
   dispose(): void;
 }
 
-export function createSensorDisplay(
+export function createSensorsTab(
   bmsService: BMSService,
   i18n: I18nService
-): SensorDisplayComponent {
-  const element = BUI.html`<div class="sensor-display"></div>`;
+): SensorsTabComponent {
+  const element = BUI.html`<div class="sensors-tab"></div>`;
   const subscriptions: (() => void)[] = [];
 
   return {
@@ -382,13 +388,13 @@ export function createSensorDisplay(
 ### Phase 2: Scene Foundation
 1. Implement `scene/scene-manager.ts` - Three.js setup
 2. Implement `scene/model-loader.ts` - IFC/Fragment loading
-3. Implement `scene/theme-handler.ts` - light/dark theme
+3. Implement `scene/theme-handler.ts` - light/dark theme with scene background sync
 4. Verify model loads and renders correctly
 
 ### Phase 3: Services Layer
 1. Migrate `services/bms/` - BMS mock service
 2. Migrate `services/documents/` - document store
-3. Migrate `services/i18n/` - translations
+3. Migrate `services/i18n/` - translations (EN/HR with page reload on change)
 4. Write unit tests for all services
 
 ### Phase 4: Core Features
@@ -404,9 +410,10 @@ export function createSensorDisplay(
 ### Phase 6: UI Layer
 1. Implement `ui/layout/` - grid layout, viewport
 2. Implement `ui/toolbar/` - floating toolbar
-3. Implement `ui/panels/model-panel/` - right panel
-4. Implement `ui/panels/properties-panel/` - left panel
-5. Implement `ui/components/` - reusable components
+3. Implement `ui/panels/model-panel/` - left panel (file loader, spatial tree, filters)
+4. Implement `ui/panels/selection-panel/` - right panel with tabs (Properties, Sensors, Documents)
+5. Implement `ui/components/` - reusable components including help-panel
+6. Implement settings buttons (theme toggle, language toggle, help button)
 
 ### Phase 7: Integration & Polish
 1. Wire everything together in `app.ts`
@@ -429,7 +436,7 @@ export function createSensorDisplay(
 - Shift+click to add to selection
 - Visual feedback: blue highlight (#3b82f6)
 - Ghosting: non-selected elements at 15% opacity
-- Selection triggers property/sensor/document updates
+- Selection triggers updates to all three tabs (properties, sensors, documents)
 
 ### Property Filtering
 - Filter by IFC category (IfcWall, IfcDoor, etc.)
@@ -447,10 +454,10 @@ export function createSensorDisplay(
 
 ### Document Management
 - Documents linked to elements by IFC GUID
-- Types: manual, specification, drawing, report, warranty, certificate, maintenance
+- Types: manual, specification, drawing, report, warranty, certificate, maintenance, other
 - Upload, download, delete operations
 - IndexedDB storage (works offline)
-- PDF viewer integration
+- Pre-seeded mock documents
 
 ### Measurement Tools
 - Length measurement between two points
@@ -482,12 +489,18 @@ export function createSensorDisplay(
 - Croatian (hr)
 - Persisted language preference
 - All UI strings translated
+- Page reload required to update BUI components
 
 ### Theming
 - Light/dark theme toggle
-- Scene background adapts to theme
-- CSS variables for colors
-- Persisted preference
+- Scene background adapts to theme (warm paper light / blueprint night dark)
+- CSS variables for all colors
+- Persisted preference in localStorage
+
+### Help System
+- Floating, draggable help panel
+- Language-aware PDF loading (USER_GUIDE.pdf or USER_GUIDE_HR.pdf)
+- Resizable panel
 
 ---
 
@@ -511,7 +524,7 @@ world.camera = new OBC.OrthoPerspectiveCamera(components);
 const fragments = components.get(OBC.FragmentsManager);
 const ifcLoader = components.get(OBC.IfcLoader);
 const classifier = components.get(OBC.Classifier);
-const itemsFinder = components.get(FRAGS.ItemsFinder);
+const itemsFinder = components.get(OBC.ItemsFinder);
 ```
 
 ### Frontend Components (OBCF)
@@ -541,6 +554,15 @@ const panel = BUI.html`
       <bim-table></bim-table>
     </bim-panel-section>
   </bim-panel>
+`;
+
+// Tabbed interface
+const tabs = BUI.html`
+  <bim-tabs>
+    <bim-tab label="Properties">...</bim-tab>
+    <bim-tab label="Sensors">...</bim-tab>
+    <bim-tab label="Documents">...</bim-tab>
+  </bim-tabs>
 `;
 
 // Pre-built components
@@ -657,6 +679,7 @@ try {
 5. **Use Fragment format** - 10-100x faster than IFC parsing
 6. **Configure LOD** - Reduce detail for distant objects
 7. **Batch state updates** - Don't trigger re-renders for each change
+8. **Block viewport resize during sidebar transitions** - Prevent render thrashing
 
 ---
 
@@ -668,10 +691,10 @@ try {
 - [BUI component examples](https://github.com/ThatOpen/engine_ui-components)
 
 ### Existing Code Reference
-- Current `main.ts` - working implementation (monolithic)
-- `bms-mock.ts` - BMS service mock implementation
-- `document-store.ts` - IndexedDB document storage
-- `i18n.ts` - internationalization system
+- Current `main.ts` - working implementation (monolithic, 5,062 lines)
+- `bms-mock.ts` - BMS service mock implementation (456 lines)
+- `document-store.ts` - IndexedDB document storage (758 lines)
+- `i18n.ts` - internationalization system (681 lines)
 
 ### Model Files
 - `public/models/OfficeBuilding_complete_2024.frag` - pre-converted (fast)
@@ -690,6 +713,7 @@ The rebuild is successful when:
 5. **Reliability**: Error states are handled gracefully
 6. **Extensibility**: New features can be added without modifying existing code
 7. **Parity**: All existing features work as before
+8. **i18n**: Language switch works correctly with page reload
 
 ---
 
@@ -701,3 +725,5 @@ The rebuild is successful when:
 - Reference existing code for business logic, but restructure the architecture
 - Ask clarifying questions if requirements are ambiguous
 - Commit after each phase with clear commit messages
+- Remember: language changes require page reload due to BUI component limitations
+- The Selection panel uses tabs (Properties, Sensors, Documents) - not separate sections

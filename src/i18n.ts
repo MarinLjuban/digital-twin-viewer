@@ -144,6 +144,36 @@ export interface Translations {
   guid: string;
   copyValue: string;
   valueCopied: string;
+
+  // BCF Topics
+  BCF: string;
+  bcfTopics: string;
+  createTopic: string;
+  noTopics: string;
+  noTopicsDesc: string;
+  topicTitle: string;
+  topicType: string;
+  topicStatus: string;
+  topicPriority: string;
+  topicDescription: string;
+  create: string;
+  deleteTopic: string;
+  bcfIssue: string;
+  bcfRemark: string;
+  bcfRequest: string;
+  bcfFault: string;
+  bcfOpen: string;
+  bcfInProgress: string;
+  bcfResolved: string;
+  bcfClosed: string;
+  goToViewpoint: string;
+  noViewpoint: string;
+  titleRequired: string;
+  exportBcf: string;
+  importBcf: string;
+  bcfExported: string;
+  bcfImported: string;
+  bcfImportError: string;
 }
 
 const translations: Record<Language, Translations> = {
@@ -288,6 +318,36 @@ const translations: Record<Language, Translations> = {
     guid: 'GUID',
     copyValue: 'Click to copy value',
     valueCopied: 'Value copied!',
+
+    // BCF Topics
+    BCF: 'Work Orders',
+    bcfTopics: 'Work Orders',
+    createTopic: 'Create Work Orders',
+    noTopics: 'No work orders yet',
+    noTopicsDesc: 'Create a work order to track issues and link them to model elements',
+    topicTitle: 'Title',
+    topicType: 'Type',
+    topicStatus: 'Status',
+    topicPriority: 'Priority',
+    topicDescription: 'Description',
+    create: 'Create',
+    deleteTopic: 'Delete',
+    bcfIssue: 'Issue',
+    bcfRemark: 'Remark',
+    bcfRequest: 'Request',
+    bcfFault: 'Fault',
+    bcfOpen: 'Open',
+    bcfInProgress: 'In Progress',
+    bcfResolved: 'Resolved',
+    bcfClosed: 'Closed',
+    goToViewpoint: 'Go to viewpoint',
+    noViewpoint: 'No viewpoint saved',
+    titleRequired: 'Title is required',
+    exportBcf: 'Export BCF',
+    importBcf: 'Import BCF',
+    bcfExported: 'BCF exported successfully',
+    bcfImported: 'BCF imported successfully',
+    bcfImportError: 'Error importing BCF file',
   },
 
   hr: {
@@ -431,6 +491,36 @@ const translations: Record<Language, Translations> = {
     guid: 'GUID',
     copyValue: 'Kliknite za kopiranje vrijednosti',
     valueCopied: 'Vrijednost kopirana!',
+
+    // BCF Topics
+    BCF: 'Radni nalozi',
+    bcfTopics: 'Radni nalozi',
+    createTopic: 'Stvori radni nalog',
+    noTopics: 'Nema tema',
+    noTopicsDesc: 'Stvorite radni nalog za praćenje problema i povezivanje s elementima modela',
+    topicTitle: 'Naslov',
+    topicType: 'Vrsta',
+    topicStatus: 'Status',
+    topicPriority: 'Prioritet',
+    topicDescription: 'Opis',
+    create: 'Stvori',
+    deleteTopic: 'Izbriši',
+    bcfIssue: 'Problem',
+    bcfRemark: 'Napomena',
+    bcfRequest: 'Zahtjev',
+    bcfFault: 'Kvar',
+    bcfOpen: 'Otvoreno',
+    bcfInProgress: 'U tijeku',
+    bcfResolved: 'Riješeno',
+    bcfClosed: 'Zatvoreno',
+    goToViewpoint: 'Idi na pogled',
+    noViewpoint: 'Nema spremljenog pogleda',
+    titleRequired: 'Naslov je obavezan',
+    exportBcf: 'Izvezi BCF',
+    importBcf: 'Uvezi BCF',
+    bcfExported: 'BCF uspješno izvezen',
+    bcfImported: 'BCF uspješno uvezen',
+    bcfImportError: 'Greška pri uvozu BCF datoteke',
   }
 };
 

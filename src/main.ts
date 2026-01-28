@@ -253,6 +253,10 @@ hoverer.material = new THREE.MeshBasicMaterial({
 // Setup ghosting feature - makes non-selected elements semi-transparent
 let ghostingEnabled = false;
 
+// BCF Topics state
+let bcfPanelVisible = false;
+let bcfViewMode: 'list' | 'create' = 'list';
+
 // Add a ghost style for semi-transparent rendering
 highlighter.styles.set("ghost", {
   color: new THREE.Color("#888888"),
@@ -350,6 +354,155 @@ console.log("BMS registered GUIDs:", BMSApi.getRegisteredGuids());
 DocumentStore.initialize().then(() => {
   console.log("[Documents] Document store initialized");
 });
+
+// Initialize BCF Topics for issue tracking
+const bcfTopics = components.get(OBC.BCFTopics);
+bcfTopics.setup({
+  version: "3",
+  author: "user@digitaltwin.app",
+  types: new Set(["Issue", "Remark", "Request", "Fault"]),
+  statuses: new Set(["Open", "In Progress", "Resolved", "Closed"]),
+  priorities: new Set(["Low", "Normal", "High", "Critical"]),
+});
+console.log("[BCF] BCF Topics initialized");
+
+// Initialize Viewpoints for BCF
+const viewpoints = components.get(OBC.Viewpoints);
+
+// ============================================
+// BCF LocalStorage Persistence
+// ============================================
+const BCF_STORAGE_KEY = "ifc-viewer-bcf-topics";
+
+interface SerializedViewpoint {
+  guid: string;
+  selectionComponents: string[];
+}
+
+interface SerializedTopic {
+  guid: string;
+  title: string;
+  type: string;
+  status: string;
+  description?: string;
+  customData?: Record<string, unknown>;
+  viewpointGuids: string[];
+}
+
+interface SerializedBCFData {
+  topics: SerializedTopic[];
+  viewpoints: SerializedViewpoint[];
+}
+
+// Save BCF topics and viewpoints to localStorage
+const saveBCFToLocalStorage = () => {
+  try {
+    const serializedTopics: SerializedTopic[] = [];
+    const serializedViewpoints: SerializedViewpoint[] = [];
+    const savedViewpointGuids = new Set<string>();
+
+    for (const topic of bcfTopics.list.values()) {
+      const viewpointGuids: string[] = [];
+
+      for (const vpGuid of topic.viewpoints) {
+        viewpointGuids.push(vpGuid);
+
+        // Only serialize each viewpoint once
+        if (!savedViewpointGuids.has(vpGuid)) {
+          const vp = viewpoints.list.get(vpGuid);
+          if (vp) {
+            serializedViewpoints.push({
+              guid: vp.guid,
+              selectionComponents: Array.from(vp.selectionComponents),
+            });
+            savedViewpointGuids.add(vpGuid);
+          }
+        }
+      }
+
+      serializedTopics.push({
+        guid: topic.guid,
+        title: topic.title,
+        type: topic.type,
+        status: topic.status,
+        description: topic.description,
+        customData: topic.customData as Record<string, unknown>,
+        viewpointGuids,
+      });
+    }
+
+    const data: SerializedBCFData = {
+      topics: serializedTopics,
+      viewpoints: serializedViewpoints,
+    };
+
+    localStorage.setItem(BCF_STORAGE_KEY, JSON.stringify(data));
+    console.log("[BCF] Saved", serializedTopics.length, "topics to localStorage");
+  } catch (error) {
+    console.error("[BCF] Error saving to localStorage:", error);
+  }
+};
+
+// Load BCF topics and viewpoints from localStorage
+const loadBCFFromLocalStorage = () => {
+  try {
+    const stored = localStorage.getItem(BCF_STORAGE_KEY);
+    if (!stored) {
+      console.log("[BCF] No stored topics found");
+      return;
+    }
+
+    const data: SerializedBCFData = JSON.parse(stored);
+
+    // First, create viewpoints
+    for (const svp of data.viewpoints) {
+      viewpoints.world = world;
+      const vp = viewpoints.create();
+
+      // Override the generated guid with the stored one
+      (vp as { guid: string }).guid = svp.guid;
+      viewpoints.list.delete(vp.guid);
+      viewpoints.list.set(svp.guid, vp);
+
+      // Restore selection components
+      for (const comp of svp.selectionComponents) {
+        vp.selectionComponents.add(comp);
+      }
+    }
+
+    // Then, create topics and link viewpoints
+    for (const st of data.topics) {
+      const topic = bcfTopics.create({
+        title: st.title,
+        type: st.type,
+        status: st.status,
+        description: st.description,
+      });
+
+      // Override the generated guid with the stored one
+      bcfTopics.list.delete(topic.guid);
+      (topic as { guid: string }).guid = st.guid;
+      bcfTopics.list.set(st.guid, topic);
+
+      // Restore custom data (contains selection mapping)
+      if (st.customData) {
+        topic.customData = st.customData;
+      }
+
+      // Link viewpoints
+      for (const vpGuid of st.viewpointGuids) {
+        topic.viewpoints.add(vpGuid);
+      }
+    }
+
+    console.log("[BCF] Loaded", data.topics.length, "topics from localStorage");
+  } catch (error) {
+    console.error("[BCF] Error loading from localStorage:", error);
+  }
+};
+
+// Load stored BCF data on startup
+loadBCFFromLocalStorage();
 
 // Setup ItemsFinder for property-based filtering
 const itemsFinder = components.get(OBC.ItemsFinder);
@@ -2890,52 +3043,976 @@ const createLeftPanel = () => BUI.Component.create(() => {
       </button>
       </div>
     </div>
-    <bim-panel-section label="${t('spatialTree')}">
-      <bim-text-input @input=${onSearch} placeholder="${t('search')}" debounce="200"></bim-text-input>
-      ${spatialTree}
-    </bim-panel-section>
-    <bim-panel-section label="${t('propertyFilter')}" icon="mdi:filter">
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        <!-- Add filter buttons -->
-        <div style="display: flex; gap: 8px;">
-          <bim-button @click=${onAddCategoryFilter} label="${t('addCategory')}" style="flex: 1;"></bim-button>
-          <bim-button @click=${onAddAttributeFilter} label="${t('addAttribute')}" style="flex: 1;"></bim-button>
+    <bim-tabs style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+      <bim-tab label="${t('model')}" icon="mdi:cube-outline">
+        <bim-panel-section label="${t('spatialTree')}">
+          <bim-text-input @input=${onSearch} placeholder="${t('search')}" debounce="200"></bim-text-input>
+          ${spatialTree}
+        </bim-panel-section>
+        <bim-panel-section label="${t('propertyFilter')}" icon="mdi:filter">
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Add filter buttons -->
+            <div style="display: flex; gap: 8px;">
+              <bim-button @click=${onAddCategoryFilter} label="${t('addCategory')}" style="flex: 1;"></bim-button>
+              <bim-button @click=${onAddAttributeFilter} label="${t('addAttribute')}" style="flex: 1;"></bim-button>
+            </div>
+
+            <!-- Aggregation toggle -->
+            <bim-checkbox @change=${onAggregationChange} label="${t('matchAllConditions')}" style="font-size: 13px;"></bim-checkbox>
+
+            <!-- Filter conditions container -->
+            <div id="filter-conditions-container" style="max-height: 320px; overflow-y: auto;"></div>
+
+            <!-- Result count -->
+            <div id="filter-result-count" style="
+              font-size: 13px;
+              font-weight: 500;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+              text-align: center;
+              padding: 8px;
+              background: var(--surface-base, #161922);
+              border-radius: 6px;
+            "></div>
+
+            <!-- Action buttons -->
+            <div style="display: flex; gap: 8px;">
+              <bim-button @click=${onApplyFilter} label="${t('apply')}" icon="mdi:check" style="flex: 1;"></bim-button>
+              <bim-button @click=${onClearFilters} label="${t('clear')}" icon="mdi:close" style="flex: 1;"></bim-button>
+            </div>
+
+            <!-- Visibility actions for filtered results -->
+            <div style="display: flex; gap: 8px; border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); padding-top: 12px; margin-top: 4px;">
+              <bim-button @click=${onIsolateFiltered} label="${t('isolate')}" icon="mdi:eye-outline" style="flex: 1;"></bim-button>
+              <bim-button @click=${onHideFiltered} label="${t('hide')}" icon="mdi:eye-off-outline" style="flex: 1;"></bim-button>
+            </div>
+          </div>
+        </bim-panel-section>
+      </bim-tab>
+      <bim-tab label="${t('bcfTopics')}" icon="mdi:comment-text-multiple">
+        <div style="display: flex; flex-direction: column; gap: 8px; padding: 8px;">
+          <div id="bcf-actions" style="display: flex; gap: 8px;">
+            <button id="bcf-export-btn" style="
+              flex: 1;
+              padding: 8px 12px;
+              background: var(--surface-raised, #1c1f2a);
+              border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+              border-radius: 6px;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+              font-size: 12px;
+              font-weight: 500;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 6px;
+              transition: all 150ms ease;
+            ">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              ${t('exportBcf')}
+            </button>
+            <button id="bcf-import-btn" style="
+              flex: 1;
+              padding: 8px 12px;
+              background: var(--surface-raised, #1c1f2a);
+              border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+              border-radius: 6px;
+              color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+              font-size: 12px;
+              font-weight: 500;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 6px;
+              transition: all 150ms ease;
+            ">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              ${t('importBcf')}
+            </button>
+            <input type="file" id="bcf-import-input" accept=".bcf,.json" style="display: none;"/>
+          </div>
+          <div id="bcf-topics-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
         </div>
-
-        <!-- Aggregation toggle -->
-        <bim-checkbox @change=${onAggregationChange} label="${t('matchAllConditions')}" style="font-size: 13px;"></bim-checkbox>
-
-        <!-- Filter conditions container -->
-        <div id="filter-conditions-container" style="max-height: 320px; overflow-y: auto;"></div>
-
-        <!-- Result count -->
-        <div id="filter-result-count" style="
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--text-secondary, rgba(255, 255, 255, 0.72));
-          text-align: center;
-          padding: 8px;
-          background: var(--surface-base, #161922);
-          border-radius: 6px;
-        "></div>
-
-        <!-- Action buttons -->
-        <div style="display: flex; gap: 8px;">
-          <bim-button @click=${onApplyFilter} label="${t('apply')}" icon="mdi:check" style="flex: 1;"></bim-button>
-          <bim-button @click=${onClearFilters} label="${t('clear')}" icon="mdi:close" style="flex: 1;"></bim-button>
-        </div>
-
-        <!-- Visibility actions for filtered results -->
-        <div style="display: flex; gap: 8px; border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); padding-top: 12px; margin-top: 4px;">
-          <bim-button @click=${onIsolateFiltered} label="${t('isolate')}" icon="mdi:eye-outline" style="flex: 1;"></bim-button>
-          <bim-button @click=${onHideFiltered} label="${t('hide')}" icon="mdi:eye-off-outline" style="flex: 1;"></bim-button>
-        </div>
-      </div>
-    </bim-panel-section>
+      </bim-tab>
+    </bim-tabs>
    </bim-panel>
   `;
 });
 let leftPanel = createLeftPanel();
+
+// ==================== BCF Topics Panel Section ====================
+
+// Inject BCF styles into document
+const injectBCFStyles = () => {
+  const style = document.createElement("style");
+  style.id = "bcf-styles";
+  style.textContent = `
+    .bcf-empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      text-align: center;
+      color: var(--text-muted, rgba(255, 255, 255, 0.32));
+    }
+
+    .bcf-empty-state svg {
+      width: 36px;
+      height: 36px;
+      margin-bottom: 10px;
+      opacity: 0.4;
+    }
+
+    .bcf-empty-state .title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+      margin-bottom: 4px;
+    }
+
+    .bcf-empty-state .desc {
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .bcf-topic-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px;
+      margin-bottom: 6px;
+      background: var(--surface-raised, #1c1f2a);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 100ms ease-out;
+    }
+
+    .bcf-topic-item:hover {
+      background: var(--surface-overlay, #232733);
+    }
+
+    .bcf-topic-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bcf-topic-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-primary, rgba(255, 255, 255, 0.95));
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bcf-topic-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--text-tertiary, rgba(255, 255, 255, 0.50));
+    }
+
+    .bcf-status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .bcf-status-badge.open {
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+    }
+
+    .bcf-status-badge.in-progress {
+      background: rgba(234, 179, 8, 0.15);
+      color: #eab308;
+    }
+
+    .bcf-status-badge.resolved {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+    }
+
+    .bcf-status-badge.closed {
+      background: rgba(107, 114, 128, 0.15);
+      color: #6b7280;
+    }
+
+    .bcf-topic-actions {
+      display: flex;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .bcf-topic-action-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      color: var(--text-tertiary, rgba(255, 255, 255, 0.50));
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 100ms ease-out;
+    }
+
+    .bcf-topic-action-btn:hover {
+      background: var(--surface-base, #161922);
+      color: var(--text-primary, rgba(255, 255, 255, 0.95));
+    }
+
+    .bcf-topic-action-btn.delete:hover {
+      color: #ef4444;
+    }
+
+    .bcf-topic-action-btn svg {
+      width: 12px;
+      height: 12px;
+    }
+  `;
+  document.head.appendChild(style);
+};
+
+// Render BCF topics list in panel section
+const renderBCFTopicsList = () => {
+  const container = document.getElementById("bcf-topics-container");
+  if (!container) return;
+
+  const topics = Array.from(bcfTopics.list.values());
+
+  if (topics.length === 0) {
+    container.innerHTML = `
+      <div class="bcf-empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          <line x1="9" y1="9" x2="15" y2="9"/>
+          <line x1="9" y1="13" x2="13" y2="13"/>
+        </svg>
+        <div class="title">${t('noTopics')}</div>
+        <div class="desc">${t('noTopicsDesc')}</div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = topics.map(topic => {
+    const statusClass = topic.status.toLowerCase().replace(/\s+/g, '-');
+    const statusLabel = getTopicStatusLabel(topic.status);
+    const typeLabel = getTopicTypeLabel(topic.type);
+
+    // Count referenced elements
+    const selectionData = topic.customData?.selection as Record<string, number[]> | undefined;
+    const elementCount = selectionData
+      ? Object.values(selectionData).reduce((sum, ids) => sum + (ids?.length || 0), 0)
+      : 0;
+
+    return `
+      <div class="bcf-topic-item" data-guid="${topic.guid}">
+        <div class="bcf-topic-content">
+          <div class="bcf-topic-title">${topic.title}</div>
+          <div class="bcf-topic-meta">
+            <span class="bcf-status-badge ${statusClass}">${statusLabel}</span>
+            <span>${typeLabel}</span>
+            ${elementCount > 0 ? `<span style="display: inline-flex; align-items: center; gap: 3px;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+              </svg>
+              ${elementCount}
+            </span>` : ''}
+          </div>
+        </div>
+        <div class="bcf-topic-actions">
+          <button class="bcf-topic-action-btn go-viewpoint" data-guid="${topic.guid}" title="${t('goToViewpoint')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button class="bcf-topic-action-btn edit-topic" data-guid="${topic.guid}" title="${t('edit')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="bcf-topic-action-btn delete" data-guid="${topic.guid}" title="${t('deleteTopic')}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Add event handlers
+  container.querySelectorAll('.bcf-topic-item').forEach(item => {
+    const guid = item.getAttribute('data-guid');
+    if (!guid) return;
+
+    // Go to viewpoint on item click
+    item.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.bcf-topic-action-btn')) return;
+      goToTopicViewpoint(guid);
+    });
+  });
+
+  container.querySelectorAll('.go-viewpoint').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const guid = (btn as HTMLElement).getAttribute('data-guid');
+      if (guid) goToTopicViewpoint(guid);
+    });
+  });
+
+  container.querySelectorAll('.bcf-topic-action-btn.edit-topic').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const guid = (btn as HTMLElement).getAttribute('data-guid');
+      if (guid) editTopic(guid);
+    });
+  });
+
+  container.querySelectorAll('.bcf-topic-action-btn.delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const guid = (btn as HTMLElement).getAttribute('data-guid');
+      if (guid) deleteTopic(guid);
+    });
+  });
+};
+
+// Get localized status label
+const getTopicStatusLabel = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    'Open': t('bcfOpen'),
+    'In Progress': t('bcfInProgress'),
+    'Resolved': t('bcfResolved'),
+    'Closed': t('bcfClosed'),
+  };
+  return statusMap[status] || status;
+};
+
+// Get localized type label
+const getTopicTypeLabel = (type: string): string => {
+  const typeMap: Record<string, string> = {
+    'Issue': t('bcfIssue'),
+    'Remark': t('bcfRemark'),
+    'Request': t('bcfRequest'),
+    'Fault': t('bcfFault'),
+  };
+  return typeMap[type] || type;
+};
+
+// Create topic modal element
+let topicModal: HTMLElement | null = null;
+let editingTopicGuid: string | null = null; // Track which topic is being edited
+
+const createTopicModal = () => {
+  if (topicModal) return topicModal;
+
+  const modal = document.createElement("div");
+  modal.id = "bcf-topic-modal";
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    backdrop-filter: blur(4px);
+  `;
+
+  modal.innerHTML = `
+    <div class="bcf-modal-content" style="
+      background: var(--surface-base, #161922);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      width: 400px;
+      max-width: 90vw;
+      max-height: 90vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    ">
+      <div class="bcf-modal-header" style="
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+        background: var(--surface-raised, #1c1f2a);
+      ">
+        <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary, rgba(255, 255, 255, 0.95));">${t('createTopic')}</h3>
+        <button id="bcf-modal-close" style="
+          background: none;
+          border: none;
+          color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+          cursor: pointer;
+          padding: 4px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 4px;
+          transition: background 150ms ease;
+        ">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <form id="bcf-topic-form" style="
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        overflow-y: auto;
+      ">
+        <div class="form-field">
+          <label style="display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); margin-bottom: 6px;">${t('topicTitle')} *</label>
+          <input type="text" id="bcf-title" required style="
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--surface-raised, #1c1f2a);
+            border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+            border-radius: 6px;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            font-size: 14px;
+            outline: none;
+            transition: border-color 150ms ease;
+            box-sizing: border-box;
+          " placeholder="${t('topicTitle')}..."/>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <div class="form-field" style="flex: 1;">
+            <label style="display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); margin-bottom: 6px;">${t('topicType')}</label>
+            <select id="bcf-type" style="
+              width: 100%;
+              padding: 10px 12px;
+              background: var(--surface-raised, #1c1f2a);
+              border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+              border-radius: 6px;
+              color: var(--text-primary, rgba(255, 255, 255, 0.95));
+              font-size: 14px;
+              outline: none;
+              cursor: pointer;
+            ">
+              <option value="Issue">${t('bcfIssue')}</option>
+              <option value="Remark">${t('bcfRemark')}</option>
+              <option value="Request">${t('bcfRequest')}</option>
+              <option value="Fault">${t('bcfFault')}</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex: 1;">
+            <label style="display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); margin-bottom: 6px;">${t('topicStatus')}</label>
+            <select id="bcf-status" style="
+              width: 100%;
+              padding: 10px 12px;
+              background: var(--surface-raised, #1c1f2a);
+              border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+              border-radius: 6px;
+              color: var(--text-primary, rgba(255, 255, 255, 0.95));
+              font-size: 14px;
+              outline: none;
+              cursor: pointer;
+            ">
+              <option value="Open">${t('bcfOpen')}</option>
+              <option value="In Progress">${t('bcfInProgress')}</option>
+              <option value="Resolved">${t('bcfResolved')}</option>
+              <option value="Closed">${t('bcfClosed')}</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label style="display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary, rgba(255, 255, 255, 0.72)); margin-bottom: 6px;">${t('topicDescription')}</label>
+          <textarea id="bcf-description" rows="3" style="
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--surface-raised, #1c1f2a);
+            border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+            border-radius: 6px;
+            color: var(--text-primary, rgba(255, 255, 255, 0.95));
+            font-size: 14px;
+            outline: none;
+            resize: vertical;
+            min-height: 60px;
+            font-family: inherit;
+            box-sizing: border-box;
+          " placeholder="${t('topicDescription')}..."></textarea>
+        </div>
+        <div id="bcf-selection-info" style="
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 12px;
+          background: var(--surface-raised, #1c1f2a);
+          border-radius: 6px;
+          font-size: 12px;
+          color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+        ">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+          </svg>
+          <span id="bcf-selection-count">0 elements selected</span>
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 4px;">
+          <button type="button" id="bcf-cancel" style="
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--surface-raised, #1c1f2a);
+            border: 1px solid var(--border-default, rgba(255, 255, 255, 0.10));
+            border-radius: 6px;
+            color: var(--text-secondary, rgba(255, 255, 255, 0.72));
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 150ms ease;
+          ">${t('cancel')}</button>
+          <button type="submit" style="
+            flex: 1;
+            padding: 12px 16px;
+            background: var(--accent, #3b82f6);
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 150ms ease;
+          ">${t('create')}</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  topicModal = modal;
+
+  // Event handlers
+  const closeModal = () => {
+    modal.style.display = "none";
+  };
+
+  modal.querySelector("#bcf-modal-close")?.addEventListener("click", closeModal);
+  modal.querySelector("#bcf-cancel")?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  modal.querySelector("#bcf-topic-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await submitTopicForm();
+    closeModal();
+  });
+
+  return modal;
+};
+
+// Submit the topic form (handles both create and edit)
+const submitTopicForm = async () => {
+  const titleInput = document.getElementById("bcf-title") as HTMLInputElement;
+  const typeSelect = document.getElementById("bcf-type") as HTMLSelectElement;
+  const statusSelect = document.getElementById("bcf-status") as HTMLSelectElement;
+  const descriptionInput = document.getElementById("bcf-description") as HTMLTextAreaElement;
+
+  const title = titleInput?.value?.trim();
+  if (!title) {
+    alert(t('titleRequired'));
+    return;
+  }
+
+  try {
+    if (editingTopicGuid) {
+      // Edit mode - update existing topic
+      const topic = bcfTopics.list.get(editingTopicGuid);
+      if (topic) {
+        topic.title = title;
+        topic.type = typeSelect?.value || "Issue";
+        topic.status = statusSelect?.value || "Open";
+        topic.description = descriptionInput?.value?.trim() || undefined;
+        console.log("[BCF] Topic updated:", topic.guid, topic.title);
+      }
+    } else {
+      // Create mode - new topic with viewpoint and selection
+      viewpoints.world = world;
+      const viewpoint = viewpoints.create();
+      await viewpoint.updateCamera(true);
+
+      // Store selection as serializable data
+      const selectionData: Record<string, number[]> = {};
+
+      for (const [modelId, ids] of Object.entries(currentSelection)) {
+        const model = fragments.list.get(modelId);
+        if (!model) continue;
+
+        const idsArray = ids instanceof Set ? Array.from(ids) : (Array.isArray(ids) ? ids : []);
+        if (idsArray.length === 0) continue;
+
+        selectionData[modelId] = idsArray;
+
+        const elementsData = await model.getItemsData(idsArray, {
+          attributes: ["GlobalId"],
+        });
+
+        for (const element of elementsData) {
+          const guidAttr = element.GlobalId;
+          if (guidAttr && "value" in guidAttr) {
+            viewpoint.selectionComponents.add(String(guidAttr.value));
+          }
+        }
+      }
+
+      // Create topic
+      const topic = bcfTopics.create({
+        title,
+        type: typeSelect?.value || "Issue",
+        status: statusSelect?.value || "Open",
+        description: descriptionInput?.value?.trim() || undefined,
+      });
+
+      topic.customData = { selection: selectionData };
+      topic.viewpoints.add(viewpoint.guid);
+
+      const selectionCount = Object.values(selectionData).reduce((sum, ids) => sum + ids.length, 0);
+      console.log("[BCF] Topic created:", topic.guid, topic.title, `(${selectionCount} elements)`);
+    }
+
+    // Reset form and edit state
+    editingTopicGuid = null;
+    titleInput.value = "";
+    typeSelect.value = "Issue";
+    statusSelect.value = "Open";
+    descriptionInput.value = "";
+
+    // Refresh the topics list and save to localStorage
+    renderBCFTopicsList();
+    saveBCFToLocalStorage();
+  } catch (error) {
+    console.error("[BCF] Error saving topic:", error);
+  }
+};
+
+// Quick create topic from toolbar - opens modal
+const quickCreateTopic = () => {
+  const modal = createTopicModal();
+
+  // Set create mode
+  editingTopicGuid = null;
+
+  // Update modal title for create mode
+  const modalTitle = modal.querySelector(".bcf-modal-header h3");
+  if (modalTitle) modalTitle.textContent = t('createTopic');
+
+  // Update submit button text
+  const submitBtn = modal.querySelector("#bcf-topic-form button[type='submit']");
+  if (submitBtn) submitBtn.textContent = t('create');
+
+  // Show selection info for create mode
+  const selectionInfo = document.getElementById("bcf-selection-info");
+  if (selectionInfo) selectionInfo.style.display = "flex";
+
+  // Update selection count
+  const selectionCount = Object.values(currentSelection).reduce((sum, ids) => {
+    if (ids instanceof Set) return sum + ids.size;
+    return sum;
+  }, 0);
+
+  const countEl = document.getElementById("bcf-selection-count");
+  if (countEl) {
+    countEl.textContent = `${selectionCount} elements selected`;
+  }
+
+  // Reset form
+  const titleInput = document.getElementById("bcf-title") as HTMLInputElement;
+  const typeSelect = document.getElementById("bcf-type") as HTMLSelectElement;
+  const statusSelect = document.getElementById("bcf-status") as HTMLSelectElement;
+  const descriptionInput = document.getElementById("bcf-description") as HTMLTextAreaElement;
+
+  if (titleInput) titleInput.value = "";
+  if (typeSelect) typeSelect.value = "Issue";
+  if (statusSelect) statusSelect.value = "Open";
+  if (descriptionInput) descriptionInput.value = "";
+
+  modal.style.display = "flex";
+  titleInput?.focus();
+};
+
+// Edit existing topic - opens modal with pre-filled data
+const editTopic = (topicGuid: string) => {
+  const topic = bcfTopics.list.get(topicGuid);
+  if (!topic) {
+    console.warn("[BCF] Topic not found for edit:", topicGuid);
+    return;
+  }
+
+  const modal = createTopicModal();
+
+  // Set edit mode
+  editingTopicGuid = topicGuid;
+
+  // Update modal title for edit mode
+  const modalTitle = modal.querySelector(".bcf-modal-header h3");
+  if (modalTitle) modalTitle.textContent = t('edit');
+
+  // Update submit button text
+  const submitBtn = modal.querySelector("#bcf-topic-form button[type='submit']");
+  if (submitBtn) submitBtn.textContent = t('save');
+
+  // Hide selection info for edit mode (viewpoint/selection already captured)
+  const selectionInfo = document.getElementById("bcf-selection-info");
+  if (selectionInfo) selectionInfo.style.display = "none";
+
+  // Pre-fill form with topic data
+  const titleInput = document.getElementById("bcf-title") as HTMLInputElement;
+  const typeSelect = document.getElementById("bcf-type") as HTMLSelectElement;
+  const statusSelect = document.getElementById("bcf-status") as HTMLSelectElement;
+  const descriptionInput = document.getElementById("bcf-description") as HTMLTextAreaElement;
+
+  if (titleInput) titleInput.value = topic.title || "";
+  if (typeSelect) typeSelect.value = topic.type || "Issue";
+  if (statusSelect) statusSelect.value = topic.status || "Open";
+  if (descriptionInput) descriptionInput.value = topic.description || "";
+
+  modal.style.display = "flex";
+  titleInput?.focus();
+};
+
+// Go to topic viewpoint
+const goToTopicViewpoint = async (topicGuid: string) => {
+  const topic = bcfTopics.list.get(topicGuid);
+  if (!topic) {
+    console.warn("[BCF] Topic not found:", topicGuid);
+    return;
+  }
+
+  const vpGuid = topic.viewpoints.values().next().value;
+  if (!vpGuid) {
+    console.warn("[BCF] Topic has no viewpoint:", topicGuid);
+    return;
+  }
+
+  const viewpoint = viewpoints.list.get(vpGuid);
+  if (!viewpoint) {
+    console.warn("[BCF] Viewpoint not found:", vpGuid);
+    return;
+  }
+
+  try {
+    // Clear any existing selection first
+    await highlighter.clear("select");
+    currentSelection = {};
+
+    // Navigate to viewpoint (camera position)
+    await viewpoint.go({ transition: true });
+
+    // Restore selection from topic's customData
+    const selectionData = topic.customData?.selection as Record<string, number[]> | undefined;
+    if (selectionData && Object.keys(selectionData).length > 0) {
+      // Convert to ModelIdMap format
+      const selection: OBC.ModelIdMap = {};
+      for (const [modelId, ids] of Object.entries(selectionData)) {
+        if (ids && ids.length > 0) {
+          selection[modelId] = new Set(ids);
+        }
+      }
+
+      // Highlight the saved elements
+      if (Object.keys(selection).length > 0) {
+        // Small delay to ensure camera transition started and rendering is stable
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        await highlighter.highlightByID("select", selection, true, false);
+        currentSelection = selection;
+
+        // Trigger selection update to refresh properties panel
+        const event = new CustomEvent("bcf-selection-restored", { detail: selection });
+        document.dispatchEvent(event);
+
+        console.log("[BCF] Selection restored:", Object.values(selection).reduce((sum, s) => sum + s.size, 0), "elements");
+      }
+    }
+
+    console.log("[BCF] Navigated to viewpoint:", vpGuid);
+  } catch (error) {
+    console.error("[BCF] Error navigating to viewpoint:", error);
+  }
+};
+
+// Delete topic
+const deleteTopic = (topicGuid: string) => {
+  const topic = bcfTopics.list.get(topicGuid);
+  if (!topic) return;
+
+  if (confirm(`Delete topic "${topic.title}"?`)) {
+    bcfTopics.list.delete(topicGuid);
+    console.log("[BCF] Topic deleted:", topicGuid);
+    renderBCFTopicsList();
+    saveBCFToLocalStorage();
+  }
+};
+
+// Export BCF topics to JSON file
+const exportBCF = () => {
+  try {
+    const stored = localStorage.getItem(BCF_STORAGE_KEY);
+    if (!stored) {
+      console.log("[BCF] No topics to export");
+      return;
+    }
+
+    const data = JSON.parse(stored);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bcf-topics-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log("[BCF] Exported", data.topics?.length || 0, "topics");
+  } catch (error) {
+    console.error("[BCF] Error exporting:", error);
+  }
+};
+
+// Import BCF topics from JSON file
+const importBCF = (file: File) => {
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const content = e.target?.result as string;
+      const data: SerializedBCFData = JSON.parse(content);
+
+      if (!data.topics || !Array.isArray(data.topics)) {
+        alert(t('bcfImportError'));
+        return;
+      }
+
+      // Clear existing topics and viewpoints
+      bcfTopics.list.clear();
+      viewpoints.list.clear();
+
+      // Import viewpoints first
+      if (data.viewpoints) {
+        for (const svp of data.viewpoints) {
+          viewpoints.world = world;
+          const vp = viewpoints.create();
+
+          // Override guid
+          (vp as { guid: string }).guid = svp.guid;
+          viewpoints.list.delete(vp.guid);
+          viewpoints.list.set(svp.guid, vp);
+
+          // Restore selection components
+          for (const comp of svp.selectionComponents) {
+            vp.selectionComponents.add(comp);
+          }
+        }
+      }
+
+      // Import topics
+      for (const st of data.topics) {
+        const topic = bcfTopics.create({
+          title: st.title,
+          type: st.type,
+          status: st.status,
+          description: st.description,
+        });
+
+        // Override guid
+        bcfTopics.list.delete(topic.guid);
+        (topic as { guid: string }).guid = st.guid;
+        bcfTopics.list.set(st.guid, topic);
+
+        // Restore custom data
+        if (st.customData) {
+          topic.customData = st.customData;
+        }
+
+        // Link viewpoints
+        for (const vpGuid of st.viewpointGuids) {
+          topic.viewpoints.add(vpGuid);
+        }
+      }
+
+      // Save to localStorage and refresh
+      saveBCFToLocalStorage();
+      renderBCFTopicsList();
+
+      console.log("[BCF] Imported", data.topics.length, "topics");
+    } catch (error) {
+      console.error("[BCF] Error importing:", error);
+      alert(t('bcfImportError'));
+    }
+  };
+
+  reader.onerror = () => {
+    alert(t('bcfImportError'));
+  };
+
+  reader.readAsText(file);
+};
+
+// Setup BCF export/import button handlers using event delegation
+const setupBCFExportImportHandlers = () => {
+  // Use event delegation on document to catch clicks on dynamically created buttons
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    // Check if clicked element or its parent is the export button
+    if (target.id === "bcf-export-btn" || target.closest("#bcf-export-btn")) {
+      e.preventDefault();
+      exportBCF();
+    }
+
+    // Check if clicked element or its parent is the import button
+    if (target.id === "bcf-import-btn" || target.closest("#bcf-import-btn")) {
+      e.preventDefault();
+      const importInput = document.getElementById("bcf-import-input") as HTMLInputElement;
+      importInput?.click();
+    }
+  });
+
+  // Handle file input change with event delegation
+  document.addEventListener("change", (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target.id === "bcf-import-input" && target.files?.[0]) {
+      importBCF(target.files[0]);
+      target.value = ""; // Reset for future imports
+    }
+  });
+
+  console.log("[BCF] Export/import handlers initialized");
+};
+
+// ==================== End BCF Topics ====================
 
 // Right panel - Selection (Selection indicator + Tabs [Sensors | Properties] + Documents)
 const createRightPanel = () => BUI.Component.create(() => {
@@ -3363,6 +4440,20 @@ const createFloatingToolbar = () => {
       <span class="toolbar-section-label">${t('visibility')}</span>
     </div>
 
+    <div class="toolbar-divider"></div>
+
+    <!-- BCF Topics section -->
+    <div class="toolbar-section">
+      <div class="toolbar-group">
+        <button class="toolbar-btn" id="bcf-toolbar-btn" data-tooltip="${t('bcfTopics')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          </svg>
+        </button>
+      </div>
+      <span class="toolbar-section-label">${t('BCF')}</span>
+    </div>
+
   `;
 
   document.body.appendChild(toolbar);
@@ -3537,6 +4628,12 @@ const createFloatingToolbar = () => {
     visibilityShowBtn?.addEventListener("click", async () => {
       await hider.set(true);
     });
+
+    // BCF Topics button - quick create topic
+    const bcfToolbarBtn = toolbar.querySelector("#bcf-toolbar-btn");
+    bcfToolbarBtn?.addEventListener("click", () => {
+      quickCreateTopic();
+    });
   };
 
   setupToolbarEvents();
@@ -3562,6 +4659,11 @@ app.layout = "main";
 
 // Create floating toolbar
 createFloatingToolbar();
+
+// Initialize BCF Topics UI
+injectBCFStyles();
+renderBCFTopicsList();
+setupBCFExportImportHandlers();
 
 // Sidebar collapse state
 let modelPanelCollapsed = false;

@@ -54,8 +54,10 @@ export function createSceneManager(): SceneManager {
       const grids = components.get(OBC.Grids);
       grids.create(world);
 
-      // Viewport resize handling
+      // Viewport resize handling with blocking flag
+      let blockViewportResize = false;
       viewport.addEventListener("resize", () => {
+        if (blockViewportResize) return;
         world.renderer?.resize();
         (world.camera as OBC.OrthoPerspectiveCamera).updateAspect();
       });
@@ -79,7 +81,7 @@ export function createSceneManager(): SceneManager {
 import * as THREE from "three";
 
 const THEME_COLORS = {
-  light: 0xe8e6e1, // Warm paper canvas
+  light: 0xe8e6e1, // Warm paper canvas (softer)
   dark: 0x0f1117,  // Blueprint night
 };
 
@@ -486,45 +488,52 @@ export interface I18nService {
   getStatusLabel(status: SensorStatus): string;
 }
 
-// Usage
+// Usage - note: language change requires page reload
 const i18n = createI18nService();
 const label = i18n.t('properties'); // "Properties" or "Svojstva"
 const sensorLabel = i18n.getSensorTypeLabel('temperature'); // "Temperature" or "Temperatura"
+
+// Language toggle with reload
+langToggle.addEventListener('click', () => {
+  const newLang = i18n.toggleLanguage();
+  // Reload the page to apply all translations to BUI components
+  window.location.reload();
+});
 ```
 
 ---
 
-## 9. UI Panel Pattern with BUI
+## 9. Tabbed Selection Panel Pattern
 
 ```typescript
-// ui/panels/properties-panel/properties-panel.ts
+// ui/panels/selection-panel/selection-panel.ts
 import * as BUI from "@thatopen/ui";
 
-export interface PropertiesPanel {
+export interface SelectionPanel {
   element: HTMLElement;
   updateSelection(guids: string[]): Promise<void>;
   dispose(): void;
 }
 
-export function createPropertiesPanel(
+export function createSelectionPanel(
   services: { bms: BMSService; documents: DocumentService; i18n: I18nService }
-): PropertiesPanel {
+): SelectionPanel {
   const { bms, documents, i18n } = services;
 
-  // Create panel structure
+  // Create tabbed panel structure
   const element = BUI.html`
-    <bim-panel label="${i18n.t('properties')}">
-      <bim-panel-section label="${i18n.t('elementInfo')}" icon="info">
-        <div id="properties-content"></div>
-      </bim-panel-section>
-
-      <bim-panel-section label="${i18n.t('sensors')}" icon="sensor">
-        <div id="sensors-content"></div>
-      </bim-panel-section>
-
-      <bim-panel-section label="${i18n.t('documents')}" icon="file">
-        <div id="documents-content"></div>
-      </bim-panel-section>
+    <bim-panel label="${i18n.t('selection')}">
+      <bim-tabs>
+        <bim-tab label="${i18n.t('properties')}">
+          <div id="properties-content"></div>
+        </bim-tab>
+        <bim-tab label="${i18n.t('sensors')}">
+          <div id="sensors-content"></div>
+        </bim-tab>
+        <bim-tab label="${i18n.t('documents')}">
+          <div id="documents-content"></div>
+        </bim-tab>
+      </bim-tabs>
     </bim-panel>
   ` as HTMLElement;
 
@@ -538,10 +547,10 @@ export function createPropertiesPanel(
       subscriptions.forEach(unsub => unsub());
       subscriptions.length = 0;
 
-      // Update properties table
+      // Update properties tab
       // ...
 
-      // Update BMS sensors with subscriptions
+      // Update sensors tab with subscriptions
       for (const guid of guids) {
         const unsub = bms.subscribe(guid, (data) => {
           // Update sensor display
@@ -549,7 +558,7 @@ export function createPropertiesPanel(
         subscriptions.push(unsub);
       }
 
-      // Update documents
+      // Update documents tab
       const docs = await documents.getDocumentsByGuids(guids);
       // Render document list
     },
@@ -570,33 +579,43 @@ export function createPropertiesPanel(
 import * as BUI from "@thatopen/ui";
 import { SensorReading } from "../../services/bms/bms-types";
 
+// Helper to get computed CSS variable value
+const getCSSVar = (name: string): string => {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+};
+
+// Get status color based on current theme
+const getStatusColor = (status: "normal" | "warning" | "alarm"): string => {
+  return getCSSVar(`--status-${status}`) ||
+    (status === "alarm" ? "#dc2626" : status === "warning" ? "#ca8a04" : "#16a34a");
+};
+
+const getStatusBgColor = (status: "normal" | "warning" | "alarm"): string => {
+  return getCSSVar(`--status-${status}-bg`) ||
+    (status === "alarm" ? "rgba(220, 38, 38, 0.12)" :
+     status === "warning" ? "rgba(202, 138, 4, 0.15)" :
+     "rgba(22, 163, 74, 0.12)");
+};
+
 export function createSensorCard(
   reading: SensorReading,
   label: string
 ): HTMLElement {
-  const getStatusColor = (status: string) => {
-    const colors = {
-      normal: { text: "#16a34a", bg: "rgba(22, 163, 74, 0.12)" },
-      warning: { text: "#ca8a04", bg: "rgba(202, 138, 4, 0.15)" },
-      alarm: { text: "#dc2626", bg: "rgba(220, 38, 38, 0.12)" },
-    };
-    return colors[status] || colors.normal;
-  };
-
-  const colors = getStatusColor(reading.status);
+  const statusColor = getStatusColor(reading.status);
+  const statusBgColor = getStatusBgColor(reading.status);
 
   return BUI.html`
     <div class="sensor-card" style="
       background: var(--surface-raised);
       border-radius: 8px;
       padding: 12px;
-      border-left: 3px solid ${colors.text};
+      border-left: 3px solid ${statusColor};
     ">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <span style="font-weight: 500; color: var(--text-secondary);">${label}</span>
         <span class="status-badge" style="
-          background: ${colors.bg};
-          color: ${colors.text};
+          background: ${statusBgColor};
+          color: ${statusColor};
           padding: 2px 8px;
           border-radius: 4px;
           font-size: 11px;
@@ -761,51 +780,74 @@ export function createCameraController(
 
 ---
 
-## 14. CSS Variables for Theming
+## 14. Settings Buttons Pattern
 
-```css
-/* From index.html - preserve these CSS variables */
-:root {
-  /* Surface colors */
-  --surface-base: #161922;
-  --surface-raised: #1c1f2a;
-  --surface-overlay: #232733;
+```typescript
+// ui/components/settings-buttons.ts
+import * as BUI from "@thatopen/ui";
+import { Language } from "../../services/i18n/i18n-service";
 
-  /* Text colors */
-  --text-primary: rgba(255, 255, 255, 0.95);
-  --text-secondary: rgba(255, 255, 255, 0.78);
-  --text-tertiary: rgba(255, 255, 255, 0.50);
-  --text-muted: rgba(255, 255, 255, 0.32);
+export function createSettingsButtons(
+  i18n: { getLanguage: () => Language; toggleLanguage: () => Language }
+): HTMLElement {
+  const currentLang = i18n.getLanguage();
 
-  /* Border colors */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.10);
+  return BUI.html`
+    <div style="display: flex; gap: 8px; padding: 8px 12px;">
+      <!-- Theme Toggle -->
+      <button id="theme-toggle" class="panel-settings-btn" style="
+        width: 32px; height: 32px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--surface-raised);
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+      ">
+        <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </button>
 
-  /* Accent colors */
-  --accent-primary: #3b82f6;
-  --accent-hover: #2563eb;
+      <!-- Language Toggle -->
+      <button id="lang-toggle" class="panel-settings-btn" style="
+        min-width: 40px; height: 32px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--surface-raised);
+        cursor: pointer;
+        font-size: 11px; font-weight: 600;
+      ">
+        <span class="lang-label">${currentLang.toUpperCase()}</span>
+      </button>
 
-  /* Status colors */
-  --status-normal: #16a34a;
-  --status-normal-bg: rgba(22, 163, 74, 0.12);
-  --status-warning: #ca8a04;
-  --status-warning-bg: rgba(202, 138, 4, 0.15);
-  --status-alarm: #dc2626;
-  --status-alarm-bg: rgba(220, 38, 38, 0.12);
-}
-
-[data-theme="light"] {
-  --surface-base: #f5f3ef;
-  --surface-raised: #ffffff;
-  --surface-overlay: #fafaf9;
-
-  --text-primary: rgba(15, 17, 23, 0.95);
-  --text-secondary: rgba(15, 17, 23, 0.75);
-  --text-tertiary: rgba(15, 17, 23, 0.55);
-  --text-muted: rgba(15, 17, 23, 0.38);
-
-  --border-subtle: rgba(15, 17, 23, 0.06);
-  --border-default: rgba(15, 17, 23, 0.12);
+      <!-- Help Toggle -->
+      <button id="help-toggle" class="panel-settings-btn" style="
+        width: 32px; height: 32px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--surface-raised);
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+      ">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </button>
+    </div>
+  ` as HTMLElement;
 }
 ```
 
@@ -850,6 +892,66 @@ export function setupFragmentsManager(
 
 ---
 
+## 16. Help Panel Pattern (Floating, Draggable)
+
+```typescript
+// ui/components/help-panel.ts
+export function setupHelpPanel(
+  helpToggleId: string,
+  getLanguage: () => 'en' | 'hr'
+) {
+  const helpPanel = document.getElementById('help-panel');
+  const helpHeader = document.getElementById('help-panel-header');
+  const helpIframe = document.getElementById('help-iframe') as HTMLIFrameElement;
+  const helpToggle = document.getElementById(helpToggleId);
+  const helpClose = document.getElementById('help-panel-close');
+
+  if (!helpPanel || !helpToggle || !helpIframe) return;
+
+  // Toggle visibility and load language-specific PDF
+  helpToggle.addEventListener('click', () => {
+    const currentLang = getLanguage();
+    const pdfFile = currentLang === 'hr' ? 'USER_GUIDE_HR.pdf' : 'USER_GUIDE.pdf';
+    helpIframe.src = new URL(pdfFile, window.location.href).href;
+    helpPanel.classList.toggle('visible');
+  });
+
+  // Close button
+  helpClose?.addEventListener('click', () => {
+    helpPanel.classList.remove('visible');
+  });
+
+  // Dragging functionality
+  let isDragging = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  helpHeader?.addEventListener('mousedown', (e) => {
+    if ((e.target as HTMLElement).closest('.help-panel-close')) return;
+    isDragging = true;
+    dragOffsetX = e.clientX - helpPanel.offsetLeft;
+    dragOffsetY = e.clientY - helpPanel.offsetTop;
+    helpPanel.style.transition = 'none';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const x = Math.max(0, Math.min(e.clientX - dragOffsetX, window.innerWidth - helpPanel.offsetWidth));
+    const y = Math.max(0, Math.min(e.clientY - dragOffsetY, window.innerHeight - helpPanel.offsetHeight));
+    helpPanel.style.left = x + 'px';
+    helpPanel.style.top = y + 'px';
+    helpPanel.style.right = 'auto';
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    helpPanel.style.transition = '';
+  });
+}
+```
+
+---
+
 ## Key Constants to Preserve
 
 ```typescript
@@ -860,4 +962,10 @@ export const HOVER_DURATION = 150; // ms
 export const BMS_UPDATE_INTERVAL = 5000; // ms
 export const LOD_UPDATE_RATE = 50; // ms
 export const WASM_PATH = "https://unpkg.com/web-ifc@0.0.72/";
+
+// Theme colors
+export const THEME_COLORS = {
+  light: 0xe8e6e1, // Warm paper canvas
+  dark: 0x0f1117,  // Blueprint night
+};
 ```
